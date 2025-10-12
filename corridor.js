@@ -13,7 +13,7 @@ const Corridor = {
         const corners = sofa.getCorners();
         for (const corner of corners) {
             if (!this.isInside(corner.x, corner.y)) {
-                return true; // Collision!
+                return true; // Kollision!
             }
         }
         return false;
