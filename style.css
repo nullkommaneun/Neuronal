@@ -113,3 +113,33 @@ p {
     background-color: var(--success-color);
     color: #1a1a1a;
 }
+
+/* NEU: Styling für die Steuerungs-Buttons */
+#controls-panel {
+    margin: 20px auto;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+}
+
+#controls-panel button {
+    padding: 10px 25px;
+    font-size: 1rem;
+    font-weight: 500;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    background-color: var(--accent-color);
+    color: white;
+    transition: background-color 0.2s;
+}
+
+#controls-panel button:hover {
+    background-color: #0056b3;
+}
+
+#controls-panel button:disabled {
+    background-color: #555;
+    color: #999;
+    cursor: not-allowed;
+}
