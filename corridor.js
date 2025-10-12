@@ -1,28 +1,29 @@
 /**
  * @file corridor.js
- * @description Definiert die physische Umgebung und eine strengere Kollisionslogik.
+ * @description Finale Physik-Engine, die zwischen "Anecken" (erlaubt)
+ * und "Durchdringen" (unmöglich) unterscheidet.
  */
 
 const Corridor = {
     width: 1.0,
     armLength: 3.0,
     
-    // ... init() bleibt unverändert ...
     init: function() {},
 
     /**
-     * KORRIGIERTE VERSION: Mit strengerer Bestrafung.
-     * Jede noch so kleine Berührung wird jetzt explizit bestraft.
-     * @param {object} sofa - Das Sofa-Objekt mit einer getCorners()-Methode.
-     * @returns {number} - Die Summe der Kollisionsverluste.
+     * FINALE VERSION: Mit "Gipswand"-Physik.
+     * @param {object} sofa - Das Sofa-Objekt.
+     * @returns {number} - Der finale Kollisionsverlust.
      */
     calculateCollisionLoss: function(sofa) {
         const corners = sofa.getCorners();
         let totalLoss = 0;
         
-        // NEU: Eine Konstante, die als Strafe für JEDE Berührung dient.
-        // Das zwingt die KI, einen echten Sicherheitsabstand zu halten.
-        const TOUCH_PENALTY = 0.01; 
+        // DEFINITION DER "GIPSWAND":
+        // Alles unter 0.5cm gilt als "Anecken".
+        const TOUCH_THRESHOLD = 0.005; // 0.5 Zentimeter
+        // Die Strafe für das Durchbrechen der Wand ist extrem hoch.
+        const PENETRATION_FACTOR = 100.0;
 
         for (const corner of corners) {
             const x = corner.x;
@@ -46,11 +47,19 @@ const Corridor = {
                 penetration = Math.sqrt(Math.pow(x - closestX, 2) + Math.pow(y - closestY, 2));
             }
 
-            // HIER IST DIE ÄNDERUNG:
+            // HIER IST DIE FINALE LOGIK:
             if (penetration > 0) {
-                // Wenn es eine Kollision gibt, addiere die quadratische Eindringtiefe
-                // PLUS die fixe Strafe für die bloße Berührung.
-                totalLoss += (penetration * penetration) + TOUCH_PENALTY;
+                if (penetration < TOUCH_THRESHOLD) {
+                    // Fall 1: "Anecken" - Die Farbschicht wird zerkratzt.
+                    // Eine kleine, lineare Strafe.
+                    totalLoss += penetration * 0.1; // Geringe Kosten für leichte Berührung
+                } else {
+                    // Fall 2: "Durchdringen" - Die Wand bricht.
+                    // Eine massive, exponentielle Strafe.
+                    const deepPenetration = penetration - TOUCH_THRESHOLD;
+                    const exponentialPenalty = Math.exp(deepPenetration * PENETRATION_FACTOR) - 1;
+                    totalLoss += exponentialPenalty;
+                }
             }
         }
         
