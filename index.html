@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="de">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Moving-Sofa · NN-Optimizer</title>
+<link rel="stylesheet" href="style.css">
+<body>
+  <header>
+    <h1>Moving-Sofa (1 m Flur) – Neural Optimizer</h1>
+    <div id="controls">
+      <label>Raster: <input id="res" type="number" value="384" min="192" max="768"></label>
+      <label>Time steps: <input id="tsteps" type="number" value="48" min="16" max="128"></label>
+      <label>λ<sub>A</sub>: <input id="wA" type="number" value="1.0" step="0.1"></label>
+      <label>λ<sub>C</sub>: <input id="wC" type="number" value="8.0" step="0.1"></label>
+      <label>λ<sub>R</sub>: <input id="wR" type="number" value="0.05" step="0.01"></label>
+      <label>λ<sub>P</sub>: <input id="wP" type="number" value="0.1" step="0.01"></label>
+      <button id="reset">Reset</button>
+      <button id="opt">Optimieren</button>
+    </div>
+  </header>
+  <canvas id="view" width="900" height="600"></canvas>
+  <section id="stats">
+    <div>Fläche: <span id="area">–</span> m²</div>
+    <div>Loss: <span id="loss">–</span></div>
+    <div>Schritt: <span id="iter">0</span></div>
+  </section>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+  <script type="module" src="main.js"></script>
+</body>
+</html>

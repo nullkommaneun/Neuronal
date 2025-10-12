@@ -1,0 +1,5 @@
+body{margin:0;background:#111;color:#eee;font-family:sans-serif;}
+header{padding:10px;background:#222;}
+#controls label{margin-right:10px;}
+canvas{display:block;margin:0 auto;background:#000;}
+#stats{padding:10px;}
