@@ -167,3 +167,27 @@ button:hover {
 #show-diag-btn.minimized {
     transform: translateX(0);
 }
+
+/* FÜGE DIES AM ENDE DEINER style.css HINZU */
+
+.settings {
+    background-color: #2b2b2b;
+    padding: 10px 15px;
+    border-radius: 8px;
+    margin-top: 5px;
+}
+.settings h4 {
+    margin: 0 0 8px 0;
+    font-size: 1em;
+    color: var(--primary-color);
+}
+.settings label {
+    margin-right: 15px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+.settings input {
+    vertical-align: middle;
+    margin-right: 5px;
+}
+
