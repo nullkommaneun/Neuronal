@@ -17,6 +17,7 @@
             <p>Initialisiere System...</p>
             <div class="badge-container">
                 <span class="badge" id="badge-js">JS</span>
+                <span class="badge" id="badge-corridor">Korridor</span>
                 <span class="badge" id="badge-tfjs">TF.js</span>
                 <span class="badge" id="badge-backend">Backend</span>
                 <span class="badge" id="badge-webgl">WebGL2</span>
@@ -40,7 +41,6 @@
                 <div>Loss: <span id="metric-loss">0.000</span></div>
                 <div>Iteration: <span id="metric-iteration">0</span></div>
             </div>
-
             <div class="settings">
                 <h4>Modus</h4>
                 <label>
@@ -50,12 +50,12 @@
                     <input type="radio" name="performance" value="quality"> Qualität
                 </label>
             </div>
-
             <button id="start-stop-btn" disabled>Lade KI...</button>
             <button id="export-svg-btn" disabled>Export SVG</button>
         </div>
     </div>
 
+    <script src="corridor.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
