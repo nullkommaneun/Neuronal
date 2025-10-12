@@ -12,14 +12,13 @@
         <h1>KI-Experiment: Das Moving Sofa Problem</h1>
         <p>Ein neuronales Netz lernt, ein Sofa durch einen L-förmigen Korridor zu manövrieren.</p>
         
-        <div id="simulation-wrapper">
-            <div id="controls-panel">
+        <div id="simulation-wrapper"> 
+            <canvas id="simulationCanvas" width="400" height="400"></canvas>
+        </div>
+<div id="controls-panel">
     <button id="startButton">Start</button>
     <button id="pauseButton" disabled>Pause</button>
 </div>
-
-            <canvas id="simulationCanvas" width="400" height="400"></canvas>
-        </div>
 
         <div id="info-panel">
             <div class="info-box">
