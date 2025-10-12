@@ -1,4 +1,4 @@
-// app.js (Version 5 - Hard Collision)
+// app.js (Version 6 - Stabilized Engine)
 document.addEventListener('DOMContentLoaded', () => {
     // UI-Elemente
     const canvas = document.getElementById('simulation-canvas'), ctx = canvas.getContext('2d');
@@ -17,54 +17,55 @@ document.addEventListener('DOMContentLoaded', () => {
         CONFIG.CANVAS_SIZE = Math.min(window.innerWidth * 0.9, window.innerHeight * 0.9, 500);
     };
     
-    // Diagnose (stabil)
+    // Diagnose
     const setBadge = (id,s,t) => { const el=document.getElementById(id); if(el){el.className='badge'; el.classList.add(s); el.textContent=t;}};
     const runDiagnostics = () => {
         setBadge('badge-js','success','JS OK');
         if(typeof Corridor !=='object'){setBadge('badge-corridor','error','Korridor FEHLT');return false;} setBadge('badge-corridor','success','Korridor OK');
         if(typeof createSofa !=='function'){setBadge('badge-sofa','error','Sofa FEHLT');return false;} setBadge('badge-sofa','success','Sofa OK');
-        if(typeof Path!=='object'){setBadge('badge-path','error','Pilot FEHLT');return false;} setBadge('badge-path','success','Pilot OK');
+        if(typeof Path !=='object'){setBadge('badge-path','error','Pilot FEHLT');return false;} setBadge('badge-path','success','Pilot OK');
         setBadge('badge-tfjs','warn','TF.js Deaktiviert');
         return true;
     };
 
-    // --- Haupt-Schleife ---
+    // Haupt-Schleife
     const simulationLoop = () => {
         if (!isRunning) return;
 
         const totalSteps = 150;
-        const step = iteration % (totalSteps + 1);
-        const progress = step / totalSteps;
+        const progress = iteration / totalSteps;
 
-        const { x, y, rotation } = Path.getPointOnPath(progress);
+        const { x, y, rotation } = Path.getPointOnPath(progress, sofa);
         sofa.setPosition(x, y, rotation);
         const hasCollision = Corridor.checkCollision(sofa);
         
-        // ✅ NEUE, HARTE KOLLISIONSLOGIK
         if (hasCollision) {
             phaseEl.textContent = "Kollision!";
-            isRunning = false; // Stoppe die Simulation sofort
+            isRunning = false;
             startStopBtn.textContent = "Neustart";
-            draw(true); // Zeichne den letzten Frame in Rot
-            return; // Beende diesen Loop-Durchlauf
+            draw(true);
+            return;
         }
         
-        // Wachstums-Logik (wird nur erreicht, wenn der ganze Pfad frei war)
-        if (step === totalSteps) {
+        if (iteration >= totalSteps) { // Pfad erfolgreich beendet
             phaseEl.textContent = "Erfolgreich!";
             sofa.grow();
-            iteration = -1; // Beginnt nächste Runde bei 0
+            iteration = 0; // Setze für den nächsten Versuch zurück
+            setTimeout(() => { // Kurze Pause zur Visualisierung
+                if (isRunning) requestAnimationFrame(simulationLoop);
+            }, 50);
+            return;
         }
         
-        draw(false); // Wenn wir hier ankommen, ist alles in Ordnung
+        draw(false);
         iteration++;
         iterationEl.textContent = iteration;
         areaEl.textContent = (sofa.width * sofa.height).toFixed(4);
-        lossEl.textContent = "0.000"; // Kollision ist jetzt ein "Game Over"-Ereignis
+        lossEl.textContent = "0.000";
         requestAnimationFrame(simulationLoop);
     };
 
-    // Visualisierung (unverändert)
+    // Visualisierung
     const draw = (hasCollision) => {
         const worldSize=4.0, scale=CONFIG.CANVAS_SIZE/worldSize;
         ctx.fillStyle='#2a2a2a';ctx.fillRect(0,0,canvas.width,canvas.height);
@@ -80,23 +81,35 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.restore();
     };
 
-    // App Start & UI-Events (unverändert)
+    // App Start & UI-Events
+    const resetSimulation = () => {
+        sofa = createSofa(0.5, 0.5);
+        iteration = 0;
+        phaseEl.textContent = "Bereit";
+        iterationEl.textContent = "0";
+        areaEl.textContent = (sofa.width * sofa.height).toFixed(4);
+        lossEl.textContent = "0.000";
+        draw(false);
+    };
+
     const main = () => {
         updateConfig();
         canvas.width = CONFIG.CANVAS_SIZE; canvas.height = CONFIG.CANVAS_SIZE;
-        if (!runDiagnostics()) { alert("Module konnten nicht geladen werden."); return; }
-        sofa = createSofa(0.5, 0.5);
-        phaseEl.textContent = "Bereit";
+        if (!runDiagnostics()) {
+            alert("Fehler: Kritische Module konnten nicht geladen werden.");
+            return;
+        }
+        
+        resetSimulation();
         const diagP = document.querySelector('#diag-content p'); if(diagP) diagP.style.display = 'none';
-        draw(false);
-        startStopBtn.disabled = false; startStopBtn.textContent = "Start";
+        
+        startStopBtn.disabled = false;
+        startStopBtn.textContent = "Start";
     };
+    
     startStopBtn.addEventListener('click', () => {
         if (startStopBtn.textContent === "Neustart") {
-            sofa = createSofa(0.5, 0.5);
-            iteration = 0;
-            phaseEl.textContent = "Bereit";
-            draw(false);
+            resetSimulation();
         }
         isRunning = !isRunning;
         startStopBtn.textContent = isRunning?'Stop':'Start';
