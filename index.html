@@ -9,13 +9,26 @@
 </head>
 <body>
     <div id="diag-overlay">
-        <div id="diag-header"><h3>Neural Sofa Explorer</h3><button id="minimize-diag">-</button></div>
+        <div id="diag-header">
+            <h3>Neural Sofa Explorer</h3>
+            <button id="minimize-diag">-</button>
+        </div>
         <div id="diag-content">
             <p>Initialisiere System...</p>
             <div class="badge-container">
-                <span class="badge" id="badge-js">JS</span><span class="badge" id="badge-corridor">Korridor</span><span class="badge" id="badge-sofa">Sofa</span><span class="badge" id="badge-tfjs">TF.js</span><span class="badge" id="badge-backend">Backend</span><span class="badge" id="badge-webgl">WebGL2</span><span class="badge" id="badge-wasm">WASM</span>
+                <span class="badge" id="badge-js">JS</span>
+                <span class="badge" id="badge-corridor">Korridor</span>
+                <span class="badge" id="badge-sofa">Sofa</span>
+                <span class="badge" id="badge-path">Pilot</span>
+                <span class="badge" id="badge-tfjs">TF.js</span>
+                <span class="badge" id="badge-backend">Backend</span>
+                <span class="badge" id="badge-webgl">WebGL2</span>
+                <span class="badge" id="badge-wasm">WASM</span>
             </div>
-            <div id="error-log-container" style="display: none;"><pre id="error-log"></pre></div>
+            <div id="error-log-container" style="display: none;">
+                <h4>Fehlerprotokoll:</h4>
+                <pre id="error-log"></pre>
+            </div>
             <button id="export-log-btn">Export Log</button>
         </div>
     </div>
@@ -27,14 +40,18 @@
             <h1>Moving Sofa Problem</h1>
             <div class="metrics">
                 <div>Fläche: <span id="metric-area">0.000</span></div>
-                <div>Loss: <span id="metric-loss">0.000</span></div>
+                <div>Kollision: <span id="metric-loss">0.000</span></div>
                 <div>Iteration: <span id="metric-iteration">0</span></div>
                 <div>Phase: <span id="metric-phase">Wartet</span></div>
             </div>
             <div class="settings">
                 <h4>Modus</h4>
-                <label><input type="radio" name="performance" value="fast" checked> Schnell</label>
-                <label><input type="radio" name="performance" value="quality"> Qualität</label>
+                <label>
+                    <input type="radio" name="performance" value="fast" checked> Schnell
+                </label>
+                <label>
+                    <input type="radio" name="performance" value="quality"> Qualität
+                </label>
             </div>
             <button id="start-stop-btn" disabled>Lade KI...</button>
             <button id="export-svg-btn" disabled>Export SVG</button>
@@ -43,6 +60,7 @@
 
     <script src="corridor.js"></script>
     <script src="sofa.js"></script>
+    <script src="path.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
