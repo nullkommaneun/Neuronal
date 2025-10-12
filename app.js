@@ -1,12 +1,10 @@
 /**
  * @file app.js
- * @description Haupt-Anwendungslogik mit Fehler-Logging.
+ * @description Haupt-Anwendungslogik mit garantierter Lade-Reihenfolge.
  */
 
-// KORREKTUR: 'load' statt 'DOMContentLoaded' verwenden.
-// Das stellt sicher, dass ALLE Skripte (corridor, sofa, path) vollständig
-// ausgeführt wurden, bevor die main-Funktion gestartet wird.
-window.addEventListener('load', main);
+// 'DOMContentLoaded' ist jetzt sicher, da die Skripte blockierend geladen werden.
+window.addEventListener('DOMContentLoaded', main);
 
 let canvas, ctx, sofa, startButton, pauseButton, logContainer;
 const SCALE = 100;
@@ -17,7 +15,10 @@ let frameCounter = 0;
 const ANIMATION_SPEED = 4;
 
 function logMessage(message, type = 'info') {
-    if (!logContainer) return;
+    if (!logContainer) {
+        logContainer = document.getElementById('log-container');
+        if(!logContainer) return; // Failsafe, falls das DOM noch nicht da ist
+    }
     const entry = document.createElement('div');
     entry.className = `log-entry ${type}`;
     entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
@@ -25,22 +26,20 @@ function logMessage(message, type = 'info') {
     logContainer.scrollTop = logContainer.scrollHeight;
 }
 
-async function main() {
+// KORREKTUR: 'async' entfernt. Die Initialisierung ist jetzt synchron.
+function main() {
     logContainer = document.getElementById('log-container');
     logMessage('Anwendung wird initialisiert...', 'info');
     
     updateBadge('badge-js', true);
-    await new Promise(resolve => setTimeout(resolve, 50));
 
     const modulesLoaded = typeof Corridor !== 'undefined' && typeof createSofa !== 'undefined' && typeof Path !== 'undefined';
     updateBadge('badge-modules', modulesLoaded);
-    if (!modulesLoaded) { logMessage('Fehler: Kritische Module konnten nicht geladen werden. Bitte Seite neu laden.', 'error'); return; }
-    await new Promise(resolve => setTimeout(resolve, 50));
+    if (!modulesLoaded) { logMessage('Fehler: Kritische Module konnten nicht geladen werden.', 'error'); return; }
     
     const tfLoaded = typeof tf !== 'undefined';
     updateBadge('badge-tf', tfLoaded);
     if (!tfLoaded) { logMessage('Fehler: TensorFlow.js nicht gefunden.', 'error'); return; }
-    await new Promise(resolve => setTimeout(resolve, 50));
     
     canvas = document.getElementById('simulationCanvas');
     ctx = canvas.getContext('2d');
@@ -48,16 +47,18 @@ async function main() {
     startButton = document.getElementById('startButton');
     pauseButton = document.getElementById('pauseButton');
     updateBadge('badge-backend', true);
-    await new Promise(resolve => setTimeout(resolve, 50));
     
     Path.init(0.01);
     updateBadge('badge-ai', true);
+    
     logMessage('Initialisierung abgeschlossen. Bereit.', 'info');
     
     setupControls();
     updateUI(0);
     draw();
 }
+
+// ... Rest der app.js Datei bleibt unverändert ...
 
 function updateUI(loss) {
     document.getElementById('sofa-size').textContent = `Breite: ${sofa.width.toFixed(2)} m, Höhe: ${sofa.height.toFixed(2)} m`;
@@ -91,7 +92,6 @@ function simulationLoop() {
     
     try {
         Path.trainStep(sofa);
-        
         const waypoints = Path.getWaypoints();
         let currentLoss = 0;
         for (const wp of waypoints) {
@@ -113,7 +113,7 @@ function simulationLoop() {
             sofa.grow();
             Path.init(0.01);
             stableFrames = 0;
-            logMessage(`Erfolg! Sofa wächst auf ${sofa.width.toFixed(2)}m. Training wird zurückgesetzt.`, 'info');
+            logMessage(`Erfolg! Sofa wächst auf ${sofa.width.toFixed(2)}m.`, 'info');
         }
         
         frameCounter++;
@@ -132,7 +132,7 @@ function simulationLoop() {
         startButton.disabled = true;
         pauseButton.disabled = true;
         logMessage(`KRITISCHER FEHLER: ${error.message}`, 'error');
-        logMessage('Simulation angehalten. Bitte Konsole für Details prüfen (F12).', 'error');
+        logMessage('Simulation angehalten.', 'error');
         console.error("Detaillierter Fehler:", error);
     }
 }
