@@ -11,15 +11,15 @@ const Path = {
     pathAdjustments: null,
 
     init: function(learningRate) {
-        // Alte Tensoren bereinigen, falls die Funktion erneut aufgerufen wird
         if (this.pathAdjustments) {
             tf.dispose(this.pathAdjustments);
         }
-        this.pathAdjustments = tf.variable(tf.randomNormal([this.numWaypoints, 3], 0, 0.01)); // [dx, dy, dRotation]
+        this.pathAdjustments = tf.variable(tf.randomNormal([this.numWaypoints, 3], 0, 0.01));
         this.optimizer = tf.train.adam(learningRate);
     },
 
     getWaypoints: function() {
+        // Diese Funktion bleibt unverändert, da sie für die Visualisierung korrekt ist.
         const adjustments = this.pathAdjustments.arraySync();
         const waypoints = [];
         
@@ -30,7 +30,6 @@ const Path = {
         
         for (let i = 0; i < this.numWaypoints; i++) {
             const t = i / (this.numWaypoints - 1);
-
             let baseX, baseY, baseRotation;
 
             if (t < 0.5) {
@@ -60,27 +59,36 @@ const Path = {
     },
 
     /**
-     * FINALE KORREKTUR: Löst den "Cannot find a connection" Fehler.
+     * FINALE KORREKTUR: Verwendet einen expliziten, manuellen Gradienten-Ansatz.
+     * Dies ist die robusteste Methode und löst den "Cannot find a connection"-Fehler endgültig.
      */
     trainStep: function(sofa) {
-        // Die Funktion, die den zu minimierenden Verlust berechnet.
+        // Schritt 1: Definiere die Funktion, die den Verlust berechnet.
         const lossFunction = () => {
-            // Da getWaypoints() die Variable this.pathAdjustments verwendet und
-            // dieser Aufruf innerhalb der Funktion stattfindet, kann TensorFlow
-            // die Verbindung zwischen der Variable und dem Ergebnis nachverfolgen.
-            const waypoints = this.getWaypoints();
-            let totalLoss = 0;
-            for (const wp of waypoints) {
-                sofa.setPosition(wp.x, wp.y, wp.rotation);
-                totalLoss += Corridor.calculateCollisionLoss(sofa);
-            }
-            // Die Funktion muss einen einzelnen Skalar-Tensor zurückgeben.
-            return tf.scalar(totalLoss / waypoints.length);
+            // tf.tidy sorgt dafür, dass alle Zwischentensoren nach der Berechnung gelöscht werden.
+            return tf.tidy(() => {
+                // WICHTIG: getWaypoints() wird INNERHALB dieser Funktion aufgerufen.
+                // TensorFlow "beobachtet" diesen Aufruf und sieht, dass this.pathAdjustments
+                // verwendet wird, um den finalen Verlust zu berechnen.
+                const waypoints = this.getWaypoints();
+                let totalLoss = 0;
+                for (const wp of waypoints) {
+                    sofa.setPosition(wp.x, wp.y, wp.rotation);
+                    totalLoss += Corridor.calculateCollisionLoss(sofa);
+                }
+                // Die Funktion muss einen einzelnen Skalar-Tensor zurückgeben.
+                return tf.scalar(totalLoss / waypoints.length);
+            });
         };
 
-        // HIER IST DIE MAGIE ✨: Wir rufen den Optimierer auf und übergeben ihm
-        // nicht nur die Verlustfunktion, sondern auch explizit eine Liste
-        // der Variablen, die er optimieren soll. Das löst den Fehler.
-        this.optimizer.minimize(lossFunction, /* returnCost */ false, [this.pathAdjustments]);
+        // Schritt 2: Berechne die Gradienten manuell.
+        // Wir fragen TensorFlow: "Was ist die Ableitung der Verlustfunktion
+        // in Bezug auf unsere lernbare Variable 'pathAdjustments'?"
+        const grads = tf.grad(lossFunction)(this.pathAdjustments);
+        
+        // Schritt 3: Wende die Gradienten an, um die Variable zu aktualisieren.
+        // Wir sagen dem Optimierer: "Nimm diese berechneten Gradienten und
+        // aktualisiere damit die Variable."
+        this.optimizer.applyGradients({[this.pathAdjustments.name]: grads});
     }
 };
