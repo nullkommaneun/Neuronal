@@ -3,59 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KI-Experiment: Das Moving Sofa Problem</title>
+    <title>KI Sofa-Optimierer</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
 </head>
 <body>
-    <div id="container">
-        <h1>KI-Experiment: Das Moving Sofa Problem</h1>
-        <p>Ein neuronales Netz lernt, ein Sofa durch einen L-förmigen Korridor zu manövrieren.</p>
-        
-        <div id="simulation-wrapper">
-            <canvas id="simulationCanvas" width="400" height="400"></canvas>
-        </div>
-
-        <div id="controls-panel">
-            <button id="startButton">Start</button>
-            <button id="pauseButton" disabled>Pause</button>
-        </div>
-
-        <div id="info-panel">
-            <div class="info-box">
-                <h3>Sofa-Dimensionen</h3>
-                <p id="sofa-size">Breite: - m, Höhe: - m</p>
-                <p id="sofa-area">Fläche: - m²</p>
+    <h1>KI lernt das perfekte Sofa</h1>
+    <div id="main-container">
+        <canvas id="canvas" width="800" height="600"></canvas>
+        <div id="controls">
+            <h2>Diagnose & Steuerung</h2>
+            <div id="diagnostics-panel">
+                <div class="badge" id="diag-js">JavaScript <span class="status"></span></div>
+                <div class="badge" id="diag-modules">Module <span class="status"></span></div>
+                <div class="badge" id="diag-tf">TensorFlow.js <span class="status"></span></div>
+                <div class="badge" id="diag-backend">TF Backend <span class="status"></span></div>
+                <div class="badge" id="diag-ai">AI Model <span class="status"></span></div>
             </div>
-            <div class="info-box">
-                <h3>Trainings-Status</h3>
-                <p id="collision-loss">Kollisionsverlust: -</p>
-                <p id="stable-frames">Stabile Frames: 0 / 100</p>
-            </div>
-        </div>
-        
-        <div id="diagnostics-panel">
-            <h3>System-Status</h3>
-            <div class="badge-container">
-                <span id="badge-js" class="badge pending">JS Entry Point</span>
-                <span id="badge-modules" class="badge pending">Module Geladen</span>
-                <span id="badge-tf" class="badge pending">TF.js Bibliothek</span>
-                <span id="badge-backend" class="badge pending">Backend Init</span>
-                <span id="badge-ai" class="badge pending">AI Model</span>
-                <span id="badge-physics" class="badge pending">Physics</span>
-            </div>
-        </div>
-
-        <div id="log-panel">
-            <h3>Protokoll</h3>
-            <div id="log-container"></div>
+            <hr>
+            <h3>Trainingsphase</h3>
+            <p id="training-phase-display">Phase 1: Kollisionsfreie Form finden</p>
+            <h3>Statistiken</h3>
+            <p id="stats-collision-loss">Kollisionsverlust: -</p>
+            <p id="stats-area-reward">Flächen-Belohnung: -</p>
         </div>
     </div>
-
-    <script src="corridor.js"></script>
-    <script src="sofa.js"></script>
-    <script src="path.js"></script>
-    <script src="physics.js"></script>
-    <script src="app.js"></script>
+    <script src="app.js" type="module"></script>
 </body>
 </html>
+ 
