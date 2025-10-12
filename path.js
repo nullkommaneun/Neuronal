@@ -1,4 +1,4 @@
-import * as tf from '@tensorflow/tfjs';
+const tf = window.tf;
 export function initPath(K=8){
   const params = tf.variable(tf.tensor1d(new Float32Array(3*K).fill(0)));
   return {params, K};

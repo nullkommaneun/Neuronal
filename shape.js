@@ -1,6 +1,6 @@
-import * as tf from '@tensorflow/tfjs';
+const tf = window.tf;
 export function createShapeModel(seed=42){
-  tf.util.setSeed(seed);
+  try{ tf.util.setSeed(seed); }catch(_){}
   const model = tf.sequential();
   model.add(tf.layers.dense({units:64, inputShape:[2], activation:'tanh'}));
   model.add(tf.layers.dense({units:64, activation:'tanh'}));

@@ -1,4 +1,4 @@
-import * as tf from '@tensorflow/tfjs';
+const tf = window.tf;
 import {softInside} from './shape.js';
 export function lossBatch({fGrid, area, hallMask, tPoints, tau, wA,wC,wR,wP, smoothPenalty}){
   return tf.tidy(()=> {
