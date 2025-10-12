@@ -2,63 +2,48 @@
 <html lang="de">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Neural Sofa Explorer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KI-Experiment: Das Moving Sofa Problem</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
 </head>
 <body>
-    <div id="diag-overlay">
-    <div id="diag-content">
-        <p>Initialisiere System...</p>
-        <div class="badge-container">
-            <span class="badge" id="badge-js">JS</span>
-            <span class="badge" id="badge-corridor">Korridor</span>
-            <span class="badge" id="badge-sofa">Sofa</span>
-            <span class="badge" id="badge-path">Pilot</span>
-            <span class="badge" id="badge-tfjs">TF.js</span>
-            <span class="badge" id="badge-backend">Backend</span>
-            <span class="badge" id="badge-ai-model">AI Model</span>
+    <div id="container">
+        <h1>KI-Experiment: Das Moving Sofa Problem</h1>
+        <p>Ein neuronales Netz lernt, ein Sofa durch einen L-förmigen Korridor zu manövrieren.</p>
+        
+        <div id="simulation-wrapper">
+            <canvas id="simulationCanvas" width="400" height="400"></canvas>
         </div>
-        </div>
-</div>
 
-            <div id="error-log-container" style="display: none;">
-                <h4>Fehlerprotokoll:</h4>
-                <pre id="error-log"></pre>
+        <div id="info-panel">
+            <div class="info-box">
+                <h3>Sofa-Dimensionen</h3>
+                <p id="sofa-size">Breite: 1.00 m, Höhe: 1.00 m</p>
+                <p id="sofa-area">Fläche: 1.00 m²</p>
             </div>
-            <button id="export-log-btn">Export Log</button>
+            <div class="info-box">
+                <h3>Trainings-Status</h3>
+                <p id="collision-loss">Kollisionsverlust: -</p>
+                <p id="stable-frames">Stabile Frames: 0 / 100</p>
+            </div>
         </div>
-    </div>
-    <button id="show-diag-btn" class="minimized" title="Diagnose anzeigen">+</button>
 
-    <div id="app-container">
-        <canvas id="simulation-canvas"></canvas>
-        <div id="controls">
-            <h1>Moving Sofa Problem</h1>
-            <div class="metrics">
-                <div>Fläche: <span id="metric-area">0.000</span></div>
-                <div>Kollision: <span id="metric-loss">0.000</span></div>
-                <div>Iteration: <span id="metric-iteration">0</span></div>
-                <div>Phase: <span id="metric-phase">Wartet</span></div>
+        <div id="diagnostics-panel">
+            <h3>System-Status</h3>
+            <div class="badge-container">
+                <span id="badge-js" class="badge pending">JS Entry Point</span>
+                <span id="badge-modules" class="badge pending">Module Geladen</span>
+                <span id="badge-tf" class="badge pending">TF.js Bibliothek</span>
+                <span id="badge-backend" class="badge pending">Backend Init</span>
+                <span id="badge-ai" class="badge pending">AI Model</span>
             </div>
-            <div class="settings">
-                <h4>Modus</h4>
-                <label>
-                    <input type="radio" name="performance" value="fast" checked> Schnell
-                </label>
-                <label>
-                    <input type="radio" name="performance" value="quality"> Qualität
-                </label>
-            </div>
-            <button id="start-stop-btn" disabled>Lade KI...</button>
-            <button id="export-svg-btn" disabled>Export SVG</button>
         </div>
     </div>
 
-    <script src="corridor.js"></script>
-    <script src="sofa.js"></script>
-    <script src="path.js"></script>
-    <script src="app.js"></script>
+    <script src="corridor.js" defer></script>
+    <script src="sofa.js" defer></script>
+    <script src="path.js" defer></script>
+    <script src="app.js" defer></script>
 </body>
 </html>
