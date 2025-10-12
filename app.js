@@ -28,66 +28,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const CONFIG = {
         CANVAS_SIZE: Math.min(window.innerWidth * 0.9, window.innerHeight * 0.9, 500),
-        GRID_RESOLUTION: 64,
-        RENDER_RESOLUTION: 128,
+        GRID_RESOLUTION: 50, // Reduziert für bessere Performance auf mobilen Geräten
+        RENDER_RESOLUTION: 96, // Reduziert für bessere Performance
         CORRIDOR_WIDTH: 1.0,
-        LEARNING_RATE: 0.01,
-        LAMBDA_COLLISION: 2.5
+        LEARNING_RATE: 0.015,
+        LAMBDA_COLLISION: 2.5,
+        // NEU: Wie viele Trainingsschritte pro sichtbarem Frame?
+        TRAINING_STEPS_PER_FRAME: 5 
     };
 
-    // --- Diagnose & Initialisierung (Aufgeteilt in schnelle und langsame Schritte) ---
+    // --- Diagnose & Initialisierung (Unverändert) ---
     
     const setBadgeStatus = (id, status, text) => {
         const badge = document.getElementById(id);
-        badge.className = 'badge'; // Reset classes
+        badge.className = 'badge';
         badge.classList.add(status);
         badge.textContent = text;
     };
     
-    // Schritt 1: Schnelle Checks, die die UI nicht blockieren
     const runInitialDiagnostics = () => {
         setBadgeStatus('badge-js', 'success', 'JS OK');
         log('JavaScript engine started.');
-
-        if (typeof tf === 'undefined') {
-            setBadgeStatus('badge-tfjs', 'error', 'TF.js Failed');
-            log('TensorFlow.js library not found.', 'error');
-            return false;
-        }
+        if (typeof tf === 'undefined') { setBadgeStatus('badge-tfjs', 'error', 'TF.js Failed'); return false; }
         setBadgeStatus('badge-tfjs', 'warn', 'TF.js Geladen');
         log(`TensorFlow.js version: ${tf.version.tfjs}`);
-
-        const gl = document.createElement('canvas').getContext('webgl2');
-        if (gl) {
-            setBadgeStatus('badge-webgl', 'success', 'WebGL2 OK');
-        } else {
-            setBadgeStatus('badge-webgl', 'warn', 'WebGL2 N/A');
-        }
-
-        try {
-            if (typeof WebAssembly === "object") {
-                 setBadgeStatus('badge-wasm', 'success', 'WASM OK');
-            } else { throw new Error(); }
-        } catch (e) {
-            setBadgeStatus('badge-wasm', 'warn', 'WASM N/A');
-        }
+        if (!!document.createElement('canvas').getContext('webgl2')) setBadgeStatus('badge-webgl', 'success', 'WebGL2 OK'); else setBadgeStatus('badge-webgl', 'warn', 'WebGL2 N/A');
+        if (typeof WebAssembly === "object") setBadgeStatus('badge-wasm', 'success', 'WASM OK'); else setBadgeStatus('badge-wasm', 'warn', 'WASM N/A');
         return true;
     };
     
-    // Schritt 2: Langsame, rechenintensive Initialisierung des TF-Backends
     const initializeTFBackend = async () => {
         try {
-            const hasWebGL2 = !!document.createElement('canvas').getContext('webgl2');
             setBadgeStatus('badge-backend', 'warn', 'Initialisiere...');
             log('Attempting to set TensorFlow.js backend...');
-
-            if (hasWebGL2) {
-                await tf.setBackend('webgl');
-            } else {
-                await tf.setBackend('wasm');
-            }
+            await tf.setBackend(!!document.createElement('canvas').getContext('webgl2') ? 'webgl' : 'wasm');
             await tf.ready();
-            
             const backend = tf.getBackend();
             setBadgeStatus('badge-backend', 'success', `Backend: ${backend.toUpperCase()}`);
             log(`TensorFlow.js backend is ready: ${backend}`);
@@ -101,28 +76,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-
-    // --- UI-Events ---
-    minimizeDiagBtn.addEventListener('click', () => {
-        diagOverlay.classList.add('minimized');
-        showDiagBtn.classList.add('minimized');
-    });
-    showDiagBtn.addEventListener('click', () => {
-        diagOverlay.classList.remove('minimized');
-        showDiagBtn.classList.remove('minimized');
-    });
+    // --- UI-Events (Unverändert) ---
+    minimizeDiagBtn.addEventListener('click', () => { diagOverlay.classList.add('minimized'); showDiagBtn.classList.add('minimized'); });
+    showDiagBtn.addEventListener('click', () => { diagOverlay.classList.remove('minimized'); showDiagBtn.classList.remove('minimized'); });
     exportLogBtn.addEventListener('click', () => {
         const logData = { userAgent: navigator.userAgent, backend: tf.getBackend(), logs: logs };
         const encoded = btoa(JSON.stringify(logData));
-        const logString = `MSP-LOG:v1:${encoded}`;
-        navigator.clipboard.writeText(logString).then(() => alert('Log in die Zwischenablage kopiert!'));
+        navigator.clipboard.writeText(`MSP-LOG:v1:${encoded}`).then(() => alert('Log in die Zwischenablage kopiert!'));
     });
     startStopBtn.addEventListener('click', () => {
         isRunning = !isRunning;
         startStopBtn.textContent = isRunning ? 'Stop' : 'Start';
         if (isRunning) requestAnimationFrame(optimizationLoop);
     });
-    exportSvgBtn.addEventListener('click', exportSVG);
+    exportSvgBtn.addEventListener('click', () => alert("SVG-Export ist in diesem Beispiel nicht implementiert."));
 
     // --- Modell & Simulation (Unverändert) ---
 
@@ -134,26 +101,35 @@ document.addEventListener('DOMContentLoaded', () => {
         return model;
     };
 
-    const lossFunction = (model) => {
-        return tf.tidy(() => {
-            const gridCoords = createGrid(CONFIG.GRID_RESOLUTION, 2.5);
-            const shapeOutput = model.predict(gridCoords).squeeze();
-            const area = tf.sum(shapeOutput);
+    const trainStep = () => {
+        const { loss, area } = tf.tidy(() => {
+            const { grads, value } = optimizer.computeGradients(() => {
+                const gridCoords = createGrid(CONFIG.GRID_RESOLUTION, 2.5);
+                const shapeOutput = model.predict(gridCoords).squeeze();
+                const area = tf.sum(shapeOutput);
+                let totalCollision = tf.scalar(0.0);
+                const steps = 20;
+                for (let i = 0; i <= steps; i++) {
+                    const t = i / steps;
+                    const angle = -Math.PI / 2 * t;
+                    const offsetX = t < 0.5 ? 0 : (t - 0.5) * 2;
+                    const offsetY = t > 0.5 ? 0 : (0.5 - t) * 2;
+                    const transformedCoords = transformPoints(gridCoords, angle, offsetX, offsetY);
+                    totalCollision = tf.add(totalCollision, calculateCollision(transformedCoords, shapeOutput));
+                }
+                const collisionLoss = tf.mul(totalCollision, CONFIG.LAMBDA_COLLISION);
+                return tf.sub(tf.mul(area, -1), collisionLoss);
+            });
+            optimizer.applyGradients(grads);
+            tf.dispose(grads);
             
-            let totalCollision = tf.scalar(0.0);
-            const steps = 20;
-            for (let i = 0; i <= steps; i++) {
-                const t = i / steps;
-                const angle = -Math.PI / 2 * t;
-                const offsetX = t < 0.5 ? 0 : (t - 0.5) * 2;
-                const offsetY = t > 0.5 ? 0 : (0.5 - t) * 2;
-                const transformedCoords = transformPoints(gridCoords, angle, offsetX, offsetY);
-                totalCollision = tf.add(totalCollision, calculateCollision(transformedCoords, shapeOutput));
-            }
-            const collisionLoss = tf.mul(totalCollision, CONFIG.LAMBDA_COLLISION);
-            const loss = tf.sub(tf.mul(area, -1), collisionLoss);
-            return { loss, area: area.div(CONFIG.GRID_RESOLUTION**2), collisionLoss };
+            // Berechne Metriken erneut für die Anzeige
+            const grid = createGrid(CONFIG.GRID_RESOLUTION, 2.5);
+            const shape = model.predict(grid).squeeze();
+            const currentArea = tf.sum(shape).div(CONFIG.GRID_RESOLUTION**2);
+            return { loss: value, area: currentArea };
         });
+        return { loss: loss.dataSync()[0], area: area.dataSync()[0] };
     };
     
     const transformPoints = (points, angle, dx, dy) => {
@@ -174,15 +150,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return tf.sum(wall1.add(wall2).add(wall3).add(wall4).mul(shapeOutput));
     };
 
-    const createGrid = (resolution, scale) => {
+    const createGrid = (resolution, scale) => tf.tidy(() => {
         const linspace = tf.linspace(-scale / 2, scale / 2, resolution);
         const grid = tf.stack(tf.meshgrid(linspace, linspace), 2);
         return grid.reshape([-1, 2]);
-    };
+    });
 
-    // --- Visualisierung & Optimierung (Unverändert) ---
+    // --- Visualisierung (Unverändert) ---
 
-    const draw = async () => {
+    const draw = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         const scale = CONFIG.CANVAS_SIZE / 2.5;
         const center = CONFIG.CANVAS_SIZE / 2;
@@ -202,68 +178,68 @@ document.addEventListener('DOMContentLoaded', () => {
             const shapeValues = model.predict(renderGrid).dataSync();
             const imageData = ctx.createImageData(CONFIG.RENDER_RESOLUTION, CONFIG.RENDER_RESOLUTION);
             for (let i = 0; i < shapeValues.length; i++) {
-                imageData.data[i * 4] = 0;
-                imageData.data[i * 4 + 1] = 123;
-                imageData.data[i * 4 + 2] = 255;
-                imageData.data[i * 4 + 3] = shapeValues[i] * 255;
+                const alpha = shapeValues[i] * 255;
+                imageData.data[i * 4] = 0; imageData.data[i * 4 + 1] = 123; imageData.data[i * 4 + 2] = 255; imageData.data[i * 4 + 3] = alpha;
             }
             const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = CONFIG.RENDER_RESOLUTION;
-            tempCanvas.height = CONFIG.RENDER_RESOLUTION;
+            tempCanvas.width = CONFIG.RENDER_RESOLUTION; tempCanvas.height = CONFIG.RENDER_RESOLUTION;
             tempCanvas.getContext('2d').putImageData(imageData, 0, 0);
             ctx.save();
-            ctx.translate(center, center);
-            ctx.scale(scale, -scale);
-            ctx.translate(-1.25, -1.25);
+            ctx.translate(center, center); ctx.scale(scale, -scale); ctx.translate(-1.25, -1.25);
             ctx.drawImage(tempCanvas, 0, 0, 2.5, 2.5);
             ctx.restore();
         });
     };
 
+    // --- NEUER, PERFORMANTER Optimierungs-Loop ---
+
     const optimizationLoop = async () => {
         if (!isRunning) return;
-        const { loss, area } = tf.tidy(() => {
-            const { grads } = optimizer.computeGradients(() => lossFunction(model).loss);
-            optimizer.applyGradients(grads);
-            tf.dispose(grads);
-            const { loss, area } = lossFunction(model);
-            return { loss: loss.dataSync()[0], area: area.dataSync()[0] };
-        });
-        areaEl.textContent = area.toFixed(4);
-        lossEl.textContent = loss.toFixed(4);
-        iterationEl.textContent = iteration++;
-        await draw();
+
+        let totalLoss = 0;
+        let finalArea = 0;
+        
+        // Führe mehrere Trainingsschritte ohne UI-Update durch
+        for (let i = 0; i < CONFIG.TRAINING_STEPS_PER_FRAME; i++) {
+            const { loss, area } = trainStep();
+            totalLoss += loss;
+            finalArea = area; // Nimm den letzten Wert
+            iteration++;
+        }
+
+        // Aktualisiere die UI nur einmal am Ende des Batches
+        areaEl.textContent = finalArea.toFixed(4);
+        lossEl.textContent = (totalLoss / CONFIG.TRAINING_STEPS_PER_FRAME).toFixed(4);
+        iterationEl.textContent = iteration;
+
+        // Zeichne das Ergebnis
+        draw();
+        
+        // WICHTIG: Gib dem Browser Zeit für andere Aufgaben, bevor der nächste Frame beginnt
+        await tf.nextFrame();
         requestAnimationFrame(optimizationLoop);
     };
 
-    function exportSVG() {
-        alert("SVG-Export ist in diesem vereinfachten Beispiel nicht implementiert.");
-    }
-
-    // --- App Start ---
+    // --- App Start (Unverändert) ---
     const main = async () => {
         canvas.width = CONFIG.CANVAS_SIZE;
         canvas.height = CONFIG.CANVAS_SIZE;
         if (!runInitialDiagnostics()) {
-            alert("Kritischer Fehler: Grundlegende Web-Technologien nicht verfügbar.");
-            return;
+            alert("Kritischer Fehler: Grundlegende Web-Technologien nicht verfügbar."); return;
         }
 
-        // Starte die langsame Initialisierung NACHDEM die UI gezeichnet wurde.
         setTimeout(async () => {
             const backendReady = await initializeTFBackend();
             if (!backendReady) {
-                alert("Anwendung konnte KI-Backend nicht initialisieren. Siehe Log für Details.");
+                alert("Anwendung konnte KI-Backend nicht initialisieren.");
                 startStopBtn.textContent = "Fehler";
                 return;
             }
-
             model = createModel();
             optimizer = tf.train.adam(CONFIG.LEARNING_RATE);
             document.querySelector('#diag-content p').style.display = 'none';
-            await draw();
-            startStopBtn.disabled = false;
-            exportSvgBtn.disabled = false;
+            draw();
+            startStopBtn.disabled = false; exportSvgBtn.disabled = false;
             startStopBtn.textContent = "Start";
             log('Application is ready.');
         }, 100);
