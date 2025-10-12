@@ -1,12 +1,11 @@
 /**
  * @file app.js
- * @description Haupt-Anwendungslogik. Initialisiert die Simulation,
- * steuert den Trainingsprozess (KI-Lehrer) und die Visualisierung.
+ * @description Haupt-Anwendungslogik mit Fehler-Logging.
  */
 
 window.addEventListener('DOMContentLoaded', main);
 
-let canvas, ctx, sofa, startButton, pauseButton;
+let canvas, ctx, sofa, startButton, pauseButton, logContainer;
 const SCALE = 100;
 let stableFrames = 0;
 let isRunning = false;
@@ -14,29 +13,39 @@ let currentWaypointIndex = 0;
 let frameCounter = 0;
 const ANIMATION_SPEED = 4;
 
-function updateBadge(id, success) {
-    const badge = document.getElementById(id);
-    if (success) {
-        badge.classList.remove('pending');
-        badge.classList.add('success');
-    }
+/**
+ * NEU: Schreibt eine Nachricht in das On-Screen-Protokoll.
+ * @param {string} message - Die anzuzeigende Nachricht.
+ * @param {string} type - 'info' oder 'error' für die Farbgebung.
+ */
+function logMessage(message, type = 'info') {
+    if (!logContainer) return;
+    const entry = document.createElement('div');
+    entry.className = `log-entry ${type}`;
+    entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+    logContainer.appendChild(entry);
+    // Automatisch nach unten scrollen
+    logContainer.scrollTop = logContainer.scrollHeight;
 }
 
 async function main() {
+    logContainer = document.getElementById('log-container');
+    logMessage('Anwendung wird initialisiert...', 'info');
+
     updateBadge('badge-js', true);
     await new Promise(resolve => setTimeout(resolve, 50));
     const modulesLoaded = typeof Corridor !== 'undefined' && typeof createSofa !== 'undefined' && typeof Path !== 'undefined';
     updateBadge('badge-modules', modulesLoaded);
-    if (!modulesLoaded) return;
+    if (!modulesLoaded) { logMessage('Fehler: Module konnten nicht geladen werden.', 'error'); return; }
     await new Promise(resolve => setTimeout(resolve, 50));
     const tfLoaded = typeof tf !== 'undefined';
     updateBadge('badge-tf', tfLoaded);
-    if (!tfLoaded) return;
+    if (!tfLoaded) { logMessage('Fehler: TensorFlow.js nicht gefunden.', 'error'); return; }
     await new Promise(resolve => setTimeout(resolve, 50));
     
     canvas = document.getElementById('simulationCanvas');
     ctx = canvas.getContext('2d');
-    sofa = createSofa(0.5, 0.5); // Starte mit einem kleinen Sofa
+    sofa = createSofa(0.5, 0.5);
     startButton = document.getElementById('startButton');
     pauseButton = document.getElementById('pauseButton');
     updateBadge('badge-backend', true);
@@ -44,19 +53,14 @@ async function main() {
     
     Path.init(0.01);
     updateBadge('badge-ai', true);
+    logMessage('Initialisierung abgeschlossen. Bereit.', 'info');
     
     setupControls();
-    
-    // NEU: UI einmal beim Start aktualisieren, um korrekte Werte anzuzeigen.
-    updateUI(0); // Initialer Verlust ist 0
-    
+    updateUI(0);
     draw();
 }
 
-/**
- * NEU: Kapselt die Logik zur Aktualisierung der Info-Panels.
- * @param {number} loss - Der aktuelle Kollisionsverlust.
- */
+// ... updateUI, setupControls bleiben unverändert ...
 function updateUI(loss) {
     document.getElementById('sofa-size').textContent = `Breite: ${sofa.width.toFixed(2)} m, Höhe: ${sofa.height.toFixed(2)} m`;
     document.getElementById('sofa-area').textContent = `Fläche: ${(sofa.width * sofa.height).toFixed(2)} m²`;
@@ -70,6 +74,7 @@ function setupControls() {
             isRunning = true;
             startButton.disabled = true;
             pauseButton.disabled = false;
+            logMessage('Simulation gestartet.', 'info');
             simulationLoop();
         }
     });
@@ -78,47 +83,71 @@ function setupControls() {
             isRunning = false;
             startButton.disabled = false;
             pauseButton.disabled = true;
+            logMessage('Simulation pausiert.', 'info');
         }
     });
 }
 
+
 function simulationLoop() {
     if (!isRunning) return;
     
-    Path.trainStep(sofa);
-    
-    const waypoints = Path.getWaypoints();
-    let currentLoss = 0;
-    for (const wp of waypoints) {
-        sofa.setPosition(wp.x, wp.y, wp.rotation);
-        currentLoss += Corridor.calculateCollisionLoss(sofa);
+    try {
+        // VERMERK: Der try...catch-Block ist die entscheidende Änderung.
+        // Wenn Path.trainStep() einen Fehler wirft (z.B. wegen NaN-Werten),
+        // wird die Ausführung nicht mehr still beendet.
+        
+        Path.trainStep(sofa);
+        
+        const waypoints = Path.getWaypoints();
+        let currentLoss = 0;
+        for (const wp of waypoints) {
+            sofa.setPosition(wp.x, wp.y, wp.rotation);
+            currentLoss += Corridor.calculateCollisionLoss(sofa);
+        }
+        currentLoss /= waypoints.length;
+        
+        // Prüfen auf ungültige Zahlen, die zum Absturz führen können
+        if (isNaN(currentLoss)) {
+            throw new Error("Kollisionsverlust ist NaN. Stoppe Simulation.");
+        }
+        
+        if (currentLoss < 0.001) {
+            stableFrames++;
+        } else {
+            stableFrames = 0;
+        }
+        if (stableFrames > 100) {
+            sofa.grow();
+            Path.init(0.01);
+            stableFrames = 0;
+            logMessage(`Erfolg! Sofa wächst auf ${sofa.width.toFixed(2)}m. Training wird zurückgesetzt.`, 'info');
+        }
+        
+        frameCounter++;
+        if (frameCounter >= ANIMATION_SPEED) {
+            frameCounter = 0;
+            currentWaypointIndex = (currentWaypointIndex + 1) % Path.numWaypoints;
+        }
+        
+        updateUI(currentLoss);
+        draw();
+        
+        // Nur wenn alles gut ging, den nächsten Frame anfordern.
+        requestAnimationFrame(simulationLoop);
+
+    } catch (error) {
+        // HIER fangen wir den Fehler ab.
+        isRunning = false;
+        startButton.disabled = true; // Verhindern, dass es erneut versucht wird
+        pauseButton.disabled = true;
+        logMessage(`KRITISCHER FEHLER: ${error.message}`, 'error');
+        logMessage('Simulation angehalten. Bitte Konsole für Details prüfen (F12).', 'error');
+        console.error("Detaillierter Fehler:", error); // Zusätzliche Details in der Browser-Konsole
     }
-    currentLoss /= waypoints.length;
-    
-    if (currentLoss < 0.001) {
-        stableFrames++;
-    } else {
-        stableFrames = 0;
-    }
-    if (stableFrames > 100) {
-        sofa.grow();
-        Path.init(0.01);
-        stableFrames = 0;
-    }
-    
-    frameCounter++;
-    if (frameCounter >= ANIMATION_SPEED) {
-        frameCounter = 0;
-        currentWaypointIndex = (currentWaypointIndex + 1) % Path.numWaypoints;
-    }
-    
-    // GEÄNDERT: Rufe die neue, saubere UI-Update-Funktion auf.
-    updateUI(currentLoss);
-    
-    draw();
-    requestAnimationFrame(simulationLoop);
 }
 
+// ... draw() bleibt unverändert ...
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
