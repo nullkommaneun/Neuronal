@@ -3,7 +3,10 @@
  * @description Haupt-Anwendungslogik mit Fehler-Logging.
  */
 
-window.addEventListener('DOMContentLoaded', main);
+// KORREKTUR: 'load' statt 'DOMContentLoaded' verwenden.
+// Das stellt sicher, dass ALLE Skripte (corridor, sofa, path) vollständig
+// ausgeführt wurden, bevor die main-Funktion gestartet wird.
+window.addEventListener('load', main);
 
 let canvas, ctx, sofa, startButton, pauseButton, logContainer;
 const SCALE = 100;
@@ -13,31 +16,27 @@ let currentWaypointIndex = 0;
 let frameCounter = 0;
 const ANIMATION_SPEED = 4;
 
-/**
- * NEU: Schreibt eine Nachricht in das On-Screen-Protokoll.
- * @param {string} message - Die anzuzeigende Nachricht.
- * @param {string} type - 'info' oder 'error' für die Farbgebung.
- */
 function logMessage(message, type = 'info') {
     if (!logContainer) return;
     const entry = document.createElement('div');
     entry.className = `log-entry ${type}`;
     entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
     logContainer.appendChild(entry);
-    // Automatisch nach unten scrollen
     logContainer.scrollTop = logContainer.scrollHeight;
 }
 
 async function main() {
     logContainer = document.getElementById('log-container');
     logMessage('Anwendung wird initialisiert...', 'info');
-
+    
     updateBadge('badge-js', true);
     await new Promise(resolve => setTimeout(resolve, 50));
+
     const modulesLoaded = typeof Corridor !== 'undefined' && typeof createSofa !== 'undefined' && typeof Path !== 'undefined';
     updateBadge('badge-modules', modulesLoaded);
-    if (!modulesLoaded) { logMessage('Fehler: Module konnten nicht geladen werden.', 'error'); return; }
+    if (!modulesLoaded) { logMessage('Fehler: Kritische Module konnten nicht geladen werden. Bitte Seite neu laden.', 'error'); return; }
     await new Promise(resolve => setTimeout(resolve, 50));
+    
     const tfLoaded = typeof tf !== 'undefined';
     updateBadge('badge-tf', tfLoaded);
     if (!tfLoaded) { logMessage('Fehler: TensorFlow.js nicht gefunden.', 'error'); return; }
@@ -60,7 +59,6 @@ async function main() {
     draw();
 }
 
-// ... updateUI, setupControls bleiben unverändert ...
 function updateUI(loss) {
     document.getElementById('sofa-size').textContent = `Breite: ${sofa.width.toFixed(2)} m, Höhe: ${sofa.height.toFixed(2)} m`;
     document.getElementById('sofa-area').textContent = `Fläche: ${(sofa.width * sofa.height).toFixed(2)} m²`;
@@ -88,15 +86,10 @@ function setupControls() {
     });
 }
 
-
 function simulationLoop() {
     if (!isRunning) return;
     
     try {
-        // VERMERK: Der try...catch-Block ist die entscheidende Änderung.
-        // Wenn Path.trainStep() einen Fehler wirft (z.B. wegen NaN-Werten),
-        // wird die Ausführung nicht mehr still beendet.
-        
         Path.trainStep(sofa);
         
         const waypoints = Path.getWaypoints();
@@ -107,7 +100,6 @@ function simulationLoop() {
         }
         currentLoss /= waypoints.length;
         
-        // Prüfen auf ungültige Zahlen, die zum Absturz führen können
         if (isNaN(currentLoss)) {
             throw new Error("Kollisionsverlust ist NaN. Stoppe Simulation.");
         }
@@ -133,21 +125,18 @@ function simulationLoop() {
         updateUI(currentLoss);
         draw();
         
-        // Nur wenn alles gut ging, den nächsten Frame anfordern.
         requestAnimationFrame(simulationLoop);
 
     } catch (error) {
-        // HIER fangen wir den Fehler ab.
         isRunning = false;
-        startButton.disabled = true; // Verhindern, dass es erneut versucht wird
+        startButton.disabled = true;
         pauseButton.disabled = true;
         logMessage(`KRITISCHER FEHLER: ${error.message}`, 'error');
         logMessage('Simulation angehalten. Bitte Konsole für Details prüfen (F12).', 'error');
-        console.error("Detaillierter Fehler:", error); // Zusätzliche Details in der Browser-Konsole
+        console.error("Detaillierter Fehler:", error);
     }
 }
 
-// ... draw() bleibt unverändert ...
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
