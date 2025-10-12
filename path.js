@@ -1,73 +1,82 @@
 /**
  * @file path.js
- * @description Finale Version mit intelligenter Rotation.
- * Die KI lernt, eine sanfte Grund-Drehung zu optimieren.
+ * @description Finale, autonome KI. Sie erfindet den Pfad selbst und ist
+ * durch Gradient Clipping vor Abstürzen geschützt.
  */
 const Path = {
     optimizer: null,
     numWaypoints: 15,
-    pathAdjustments: null,
+    pathWaypoints: null, // GEÄNDERT: Speichert jetzt absolute Koordinaten
 
     init: function(learningRate) {
-        if (this.pathAdjustments) tf.dispose(this.pathAdjustments);
-        this.pathAdjustments = tf.variable(tf.randomNormal([this.numWaypoints, 3], 0, 0.01));
+        if (this.pathWaypoints) tf.dispose(this.pathWaypoints);
+        
+        // GEÄNDERT: Wir initialisieren die KI nicht mehr mit Zufallswerten um Null,
+        // sondern geben ihr einen einfachen "Startgedanken": einen geraden Pfad
+        // vom Startpunkt nach oben. Das hilft ihr, schneller eine sinnvolle
+        // Lösung zu finden, als wenn sie bei komplettem Chaos anfangen müsste.
+        const initialPath = [];
+        for (let i = 0; i < this.numWaypoints; i++) {
+            const t = i / (this.numWaypoints - 1);
+            const x = 0.5; // Mitte des Korridors
+            const y = (Corridor.armLength - 0.5) - t * (Corridor.armLength - 1.0);
+            const rotation = 0;
+            initialPath.push(x, y, rotation);
+        }
+        this.pathWaypoints = tf.variable(tf.tensor(initialPath, [this.numWaypoints, 3]));
+        
         this.optimizer = tf.train.adam(learningRate);
     },
 
+    // GEÄNDERT: Die Funktion liest jetzt nur noch die absoluten Werte aus.
+    // Keine Berechnung eines Basispfades mehr.
     getWaypoints: function() {
         return tf.tidy(() => {
-            const adjustments = this.pathAdjustments.arraySync();
-            const waypoints = [];
-            const corridorWidth = Corridor.width, armLength = Corridor.armLength;
-            const centerX = corridorWidth / 2, centerY = corridorWidth / 2;
-            
-            for (let i = 0; i < this.numWaypoints; i++) {
-                const t = i / (this.numWaypoints - 1);
-                let baseX, baseY;
-
-                // Position-Logik bleibt gleich (hoch, dann rechts)
-                if (t < 0.5) {
-                    const t_segment = t * 2;
-                    baseX = centerX;
-                    const startY = armLength - centerY, cornerY = centerY;
-                    baseY = startY + t_segment * (cornerY - startY); 
-                } else {
-                    const t_segment = (t - 0.5) * 2;
-                    baseY = centerY;
-                    const cornerX = centerX, endX = armLength - centerX;
-                    baseX = cornerX + t_segment * (endX - cornerX);
-                }
-
-                // GEÄNDERT: Sanfte, kontinuierliche Drehung als Basis
-                // Statt einer harten 90°-Wende interpolieren wir die Drehung linear
-                // über den gesamten Pfad. Das gibt der KI eine viel bessere Ausgangslage.
-                const baseRotation = t * (Math.PI / 2);
-
-                const adjustment = adjustments[i];
-                waypoints.push({
-                    x: baseX + adjustment[0],
-                    y: baseY + adjustment[1],
-                    rotation: baseRotation + adjustment[2]
-                });
-            }
-            return waypoints;
+            const waypointsData = this.pathWaypoints.arraySync();
+            return waypointsData.map(wp => ({ x: wp[0], y: wp[1], rotation: wp[2] }));
         });
     },
 
     trainStep: function(sofa) {
-        const variables = [this.pathAdjustments];
-        this.optimizer.minimize(() => {
-            let totalLoss = 0;
-            const waypoints = this.getWaypoints();
-            
-            for (const wp of waypoints) {
-                sofa.setPosition(wp.x, wp.y, wp.rotation);
-                totalLoss += Corridor.calculateCollisionLoss(sofa);
-            }
-            
-            const dummyLoss = this.pathAdjustments.sum().mul(0);
-            return tf.scalar(totalLoss / waypoints.length).add(dummyLoss);
-            
-        }, /* returnCost */ false, variables);
+        // Wir verwenden die explizite Gradienten-Berechnung, um Clipping anwenden zu können.
+        const lossFunction = () => {
+            // Wichtig: Wir müssen die Logik hier innerhalb der Funktion nachbilden,
+            // damit TensorFlow die Verbindung tracen kann.
+            return tf.tidy(() => {
+                let totalLoss = tf.scalar(0);
+                for (let i = 0; i < this.numWaypoints; i++) {
+                    const waypoint = this.pathWaypoints.slice([i, 0], [1, 3]).squeeze();
+                    const x = waypoint.slice(0, 1);
+                    const y = waypoint.slice(1, 1);
+                    const rotation = waypoint.slice(2, 1);
+
+                    // Da die Physik-Engine in JS ist, müssen wir eine Brücke bauen.
+                    // Wir extrahieren die Werte, berechnen den Verlust und fügen ihn
+                    // auf eine für TF nachverfolgbare Weise hinzu.
+                    const xVal = x.arraySync()[0];
+                    const yVal = y.arraySync()[0];
+                    const rotVal = rotation.arraySync()[0];
+
+                    const tempSofa = { 
+                        width: sofa.width, height: sofa.height, x: xVal, y: yVal, rotation: rotVal,
+                        getCorners: sofa.getCorners
+                    };
+                    const loss = Corridor.calculateCollisionLoss(tempSofa);
+                    
+                    // Der "Dummy"-Trick, um die Verbindung zu garantieren.
+                    totalLoss = totalLoss.add(tf.scalar(loss).add(waypoint.sum().mul(0)));
+                }
+                return totalLoss.div(tf.scalar(this.numWaypoints));
+            });
+        };
+
+        const grads = tf.grad(lossFunction)(this.pathWaypoints);
+        
+        // NEU: GRADIENT CLIPPING
+        // Wir begrenzen die "Panikreaktion" der KI auf einen Maximalwert von 1.0.
+        // Das verhindert, dass die Gradienten explodieren und das Training crasht.
+        const clippedGrads = tf.clipByValue(grads, -1.0, 1.0);
+
+        this.optimizer.applyGradients({[this.pathWaypoints.name]: clippedGrads});
     }
 };
