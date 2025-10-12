@@ -1,27 +1,26 @@
-// path.js (Stable, Non-AI version)
+// path.js (Ultra-Stable, Linear Path)
 const Path = {
-    getPointOnPath: function(progress) {
+    getPointOnPath: function(progress, sofa) {
         let xPos, yPos, rotation;
-        const cornerCenter = { x: Corridor.width, y: Corridor.width };
-        const radius = Corridor.width / 2;
+        const cornerY = Corridor.armLength - Corridor.width / 2;
+        const cornerX = Corridor.width / 2;
 
-        if (progress < 0.333) { // 1. Anfahrt zur Kurve
-            const phaseProgress = progress / 0.333;
-            xPos = radius;
-            // ✅ KORREKTUR: Der Pfad startet jetzt bei y=radius (0.5m)
-            // und bewegt sich von dort zur Ecke.
-            yPos = radius + (phaseProgress * (cornerCenter.y - radius));
+        // Der Pfad ist in 3 simple Phasen unterteilt: runter, drehen, rechts
+        if (progress < 0.45) { // Phase 1: Geradeaus nach unten
+            const phaseProgress = progress / 0.45;
+            xPos = Corridor.width / 2;
+            // Startet bei der sicheren Sofa-Position und bewegt sich zur Ecke
+            yPos = (sofa.height / 2) + (phaseProgress * (cornerY - sofa.height / 2));
             rotation = 0;
-        } else if (progress < 0.666) { // 2. Die Kurve
-            const phaseProgress = (progress - 0.333) / 0.333;
-            const angle = (Math.PI / 2) * phaseProgress;
-            xPos = cornerCenter.x - Math.cos(angle) * radius;
-            yPos = cornerCenter.y + Math.sin(angle) * radius;
-            rotation = angle;
-        } else { // 3. Wegfahrt von der Kurve
-            const phaseProgress = (progress - 0.666) / 0.333;
-            xPos = cornerCenter.x + radius + (phaseProgress * (Corridor.armLength - cornerCenter.x - radius));
-            yPos = cornerCenter.y + radius;
+        } else if (progress < 0.55) { // Phase 2: Kurze Drehung
+            const phaseProgress = (progress - 0.45) / 0.10;
+            xPos = cornerX;
+            yPos = cornerY;
+            rotation = (Math.PI / 2) * phaseProgress;
+        } else { // Phase 3: Geradeaus nach rechts
+            const phaseProgress = (progress - 0.55) / 0.45;
+            xPos = cornerX + (phaseProgress * (Corridor.armLength - cornerX));
+            yPos = cornerY;
             rotation = Math.PI / 2;
         }
         return { x: xPos, y: yPos, rotation: rotation };
