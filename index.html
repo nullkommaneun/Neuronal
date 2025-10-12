@@ -12,19 +12,20 @@
         <h1>KI-Experiment: Das Moving Sofa Problem</h1>
         <p>Ein neuronales Netz lernt, ein Sofa durch einen L-förmigen Korridor zu manövrieren.</p>
         
-        <div id="simulation-wrapper"> 
+        <div id="simulation-wrapper">
             <canvas id="simulationCanvas" width="400" height="400"></canvas>
         </div>
-<div id="controls-panel">
-    <button id="startButton">Start</button>
-    <button id="pauseButton" disabled>Pause</button>
-</div>
+
+        <div id="controls-panel">
+            <button id="startButton">Start</button>
+            <button id="pauseButton" disabled>Pause</button>
+        </div>
 
         <div id="info-panel">
             <div class="info-box">
                 <h3>Sofa-Dimensionen</h3>
-                <p id="sofa-size">Breite: 1.00 m, Höhe: 1.00 m</p>
-                <p id="sofa-area">Fläche: 1.00 m²</p>
+                <p id="sofa-size">Breite: - m, Höhe: - m</p>
+                <p id="sofa-area">Fläche: - m²</p>
             </div>
             <div class="info-box">
                 <h3>Trainings-Status</h3>
@@ -32,7 +33,7 @@
                 <p id="stable-frames">Stabile Frames: 0 / 100</p>
             </div>
         </div>
-
+        
         <div id="diagnostics-panel">
             <h3>System-Status</h3>
             <div class="badge-container">
@@ -43,6 +44,12 @@
                 <span id="badge-ai" class="badge pending">AI Model</span>
             </div>
         </div>
+
+        <div id="log-panel">
+            <h3>Protokoll</h3>
+            <div id="log-container"></div>
+        </div>
+
     </div>
 
     <script src="corridor.js" defer></script>
