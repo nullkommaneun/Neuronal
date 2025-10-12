@@ -1,8 +1,7 @@
 /**
  * @file path.js
- * @description Finale, intelligente KI. Eine bessere "Starthypothese"
- * (ein gerader Pfad von A nach B) ermöglicht es der KI, das "lokale Minimum"
- * zu überwinden und eine echte Lösung zu finden.
+ * @description Finale, stabile KI. Eine massiv erhöhte Kollisionsstrafe
+ * zwingt die KI, Sicherheit über alles andere zu stellen.
  */
 const Path = {
     optimizer: null,
@@ -12,12 +11,10 @@ const Path = {
     init: function(learningRate) {
         if (this.pathDeltas) tf.dispose(this.pathDeltas);
         
-        // NEU: Intelligente Initialisierung
         const initialDeltas = [];
         const startPos = { x: 0.5, y: Corridor.armLength - 0.5 };
         const endPos = { x: Corridor.armLength - 0.5, y: 0.5 };
 
-        // Wir berechnen die Schritte, die für eine gerade Linie von A nach B nötig sind.
         let lastX = startPos.x;
         let lastY = startPos.y;
         for (let i = 0; i < this.numWaypoints - 1; i++) {
@@ -28,7 +25,7 @@ const Path = {
             const dx = nextX - lastX;
             const dy = nextY - lastY;
             
-            initialDeltas.push(dx, dy, 0); // Initialer Rotations-Schritt ist 0
+            initialDeltas.push(dx, dy, 0);
             
             lastX = nextX;
             lastY = nextY;
@@ -76,7 +73,9 @@ const Path = {
             const dy = goalPosition.y - lastWaypoint.y;
             const distanceToGoal = tf.scalar(Math.sqrt(dx*dx + dy*dy));
 
-            const COLLISION_WEIGHT = 50.0;
+            // HIER IST DIE FINALE ÄNDERUNG:
+            // Wir machen den "Stock" 100x schmerzhafter als vorher.
+            const COLLISION_WEIGHT = 5000.0; 
             const GOAL_WEIGHT = 1.0;
             const finalLoss = collisionLossTensor.mul(COLLISION_WEIGHT).add(distanceToGoal.mul(GOAL_WEIGHT));
             
