@@ -9,29 +9,23 @@
 </head>
 <body>
     <div id="diag-overlay">
-        <div id="diag-header">
-            <h3>Neural Sofa Explorer</h3>
-            <button id="minimize-diag">-</button>
-        </div>
+        <div id="diag-header"><h3>Neural Sofa Explorer</h3><button id="minimize-diag">-</button></div>
         <div id="diag-content">
             <p>Initialisiere System...</p>
             <div class="badge-container">
                 <span class="badge" id="badge-js">JS</span>
                 <span class="badge" id="badge-corridor">Korridor</span>
+                <span class="badge" id="badge-sofa">Sofa</span>
                 <span class="badge" id="badge-tfjs">TF.js</span>
                 <span class="badge" id="badge-backend">Backend</span>
                 <span class="badge" id="badge-webgl">WebGL2</span>
                 <span class="badge" id="badge-wasm">WASM</span>
             </div>
-            <div id="error-log-container" style="display: none;">
-                <h4>Fehlerprotokoll:</h4>
-                <pre id="error-log"></pre>
-            </div>
+            <div id="error-log-container" style="display: none;"><pre id="error-log"></pre></div>
             <button id="export-log-btn">Export Log</button>
         </div>
     </div>
     <button id="show-diag-btn" class="minimized" title="Diagnose anzeigen">+</button>
-
     <div id="app-container">
         <canvas id="simulation-canvas"></canvas>
         <div id="controls">
@@ -43,12 +37,8 @@
             </div>
             <div class="settings">
                 <h4>Modus</h4>
-                <label>
-                    <input type="radio" name="performance" value="fast" checked> Schnell
-                </label>
-                <label>
-                    <input type="radio" name="performance" value="quality"> Qualität
-                </label>
+                <label><input type="radio" name="performance" value="fast" checked> Schnell</label>
+                <label><input type="radio" name="performance" value="quality"> Qualität</label>
             </div>
             <button id="start-stop-btn" disabled>Lade KI...</button>
             <button id="export-svg-btn" disabled>Export SVG</button>
@@ -56,6 +46,7 @@
     </div>
 
     <script src="corridor.js"></script>
+    <script src="sofa.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
