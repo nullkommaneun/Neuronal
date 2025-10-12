@@ -1,127 +1,176 @@
-// app.js (Version with Detailed AI Loader)
-document.addEventListener('DOMContentLoaded', () => {
-    // UI-Elemente und globale Variablen (unverändert)
-    const canvas = document.getElementById('simulation-canvas'), ctx = canvas.getContext('2d');
-    const areaEl = document.getElementById('metric-area'), lossEl = document.getElementById('metric-loss');
-    const iterationEl = document.getElementById('metric-iteration'), phaseEl = document.getElementById('metric-phase');
-    const startStopBtn = document.getElementById('start-stop-btn');
-    
-    let isRunning = false, iteration = 0, CONFIG;
-    let sofa, currentPath = [], stableCounter = 0;
+/**
+ * @file app.js
+ * @description Haupt-Anwendungslogik. Initialisiert die Simulation,
+ * steuert den Trainingsprozess (KI-Lehrer) und die Visualisierung.
+ */
 
-    const CONFIG_MODES = {
-        fast: { LEARNING_RATE: 0.01 },
-        quality: { LEARNING_RATE: 0.005 }
-    };
+// Warten, bis das gesamte DOM geladen ist, bevor wir die Anwendung starten.
+window.addEventListener('DOMContentLoaded', main);
 
-    const updateConfig = () => { /* ... (unverändert) ... */ };
-    
-    // --- Diagnose mit detaillierterem Feedback ---
-    const setBadge = (id, status, text) => { 
-        const el = document.getElementById(id); 
-        if(el) { el.className='badge'; el.classList.add(status); el.textContent=text; }
-    };
+// Globale Variablen für den Zustand der Simulation
+let canvas, ctx;
+let sofa;
+const SCALE = 100; // 100 Pixel pro Meter
+let collisionLossHistory = [];
+let stableFrames = 0;
 
-    const runDiagnostics = () => {
-        setBadge('badge-js','success','JS OK');
-        if(typeof Corridor!=='object'){setBadge('badge-corridor','error','Korridor FEHLT');return false;} setBadge('badge-corridor','success','Korridor OK');
-        if(typeof createSofa!=='function'){setBadge('badge-sofa','error','Sofa FEHLT');return false;} setBadge('badge-sofa','success','Sofa OK');
-        if(typeof Path!=='object'){setBadge('badge-path','error','Pilot FEHLT');return false;} setBadge('badge-path','success','Pilot OK');
-        if(typeof tf!=='object'){setBadge('badge-tfjs','error','TF.js FEHLT');return false;} setBadge('badge-tfjs','warn','TF.js Geladen');
-        return true;
-    };
+/**
+ * Aktualisiert den Status eines Badges im Diagnose-Panel.
+ * @param {string} id - Die ID des Badge-Elements.
+ * @param {boolean} success - Ob der Status erfolgreich ist.
+ */
+function updateBadge(id, success) {
+    const badge = document.getElementById(id);
+    if (success) {
+        badge.classList.remove('pending');
+        badge.classList.add('success');
+    }
+}
 
-    // --- Simulation & Visualisierung (unverändert) ---
-    const simulationLoop = async () => { /* ... */ };
-    const draw = () => { /* ... */ };
+/**
+ * Asynchrone Hauptfunktion zur Initialisierung der Anwendung.
+ * VERMERK: Die Verwendung von 'async' und 'await' mit 'setTimeout' ist eine
+ * moderne Methode, um nicht blockierende Ladeanimationen zu erstellen.
+ * Die UI bleibt reaktiv, während die Initialisierungsschritte nacheinander ablaufen.
+ */
+async function main() {
+    // 1. Schritt: JS Entry Point
+    updateBadge('badge-js', true);
+    await new Promise(resolve => setTimeout(resolve, 50)); // Kurze Pause für den visuellen Effekt
 
-    // --- App Start mit schrittweisem KI-Lader ---
-    const main = async () => {
-        updateConfig();
-        canvas.width = CONFIG.CANVAS_SIZE; canvas.height = CONFIG.CANVAS_SIZE;
-        
-        // Schritt 1: Grundlegende Modul-Checks (schnell)
-        if (!runDiagnostics()) {
-            alert("Fehler: Kritische Module konnten nicht geladen werden.");
-            return;
+    // 2. Schritt: Überprüfen, ob alle Module (Objekte) geladen sind.
+    const modulesLoaded = typeof Corridor !== 'undefined' && typeof createSofa !== 'undefined' && typeof Path !== 'undefined';
+    updateBadge('badge-modules', modulesLoaded);
+    if (!modulesLoaded) return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // 3. Schritt: Überprüfen, ob die TF.js-Bibliothek verfügbar ist.
+    const tfLoaded = typeof tf !== 'undefined';
+    updateBadge('badge-tf', tfLoaded);
+    if (!tfLoaded) return;
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // 4. Schritt: Backend initialisieren (Canvas, Sofa, etc.)
+    canvas = document.getElementById('simulationCanvas');
+    ctx = canvas.getContext('2d');
+    sofa = createSofa(1.0, 1.0); // Start mit einem 1x1 Meter Sofa
+    updateBadge('badge-backend', true);
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    // 5. Schritt: KI-Modell erstellen
+    Path.init(0.01); // Lernrate von 0.01
+    updateBadge('badge-ai', true);
+
+    // Starte die Hauptschleife der Simulation.
+    simulationLoop();
+}
+
+/**
+ * Die Hauptschleife der Anwendung. Wird mit requestAnimationFrame kontinuierlich aufgerufen.
+ */
+function simulationLoop() {
+    // 1. KI-Training: Führe einen Lernschritt durch.
+    Path.trainStep(sofa);
+
+    // 2. Verlust-Überwachung für Curriculum Learning
+    const waypoints = Path.getWaypoints();
+    let currentLoss = 0;
+    for (const wp of waypoints) {
+        sofa.setPosition(wp.x, wp.y, wp.rotation);
+        currentLoss += Corridor.calculateCollisionLoss(sofa);
+    }
+    currentLoss /= waypoints.length;
+
+    // HINWEIS: Dies ist die Curriculum-Learning-Logik.
+    // Der "Lehrer" (app.js) bewertet die Leistung des "Schülers" (Path.js).
+    if (currentLoss < 0.001) {
+        stableFrames++;
+    } else {
+        stableFrames = 0; // Rückschlag, Zähler zurücksetzen.
+    }
+
+    // Wenn der Pfad für 100 Frames stabil und kollisionsfrei war...
+    if (stableFrames > 100) {
+        // ...erhöhe den Schwierigkeitsgrad.
+        sofa.grow();
+        // VERMERK: Das KI-Modell wird zurückgesetzt. Es ist oft einfacher,
+        // das neue, schwierigere Problem von Grund auf zu lernen, als
+        // eine alte Lösung anzupassen.
+        Path.init(0.01);
+        stableFrames = 0; // Zähler für die nächste Stufe zurücksetzen.
+    }
+
+    // 3. Aktualisiere die UI-Anzeigen.
+    document.getElementById('sofa-size').textContent = `Breite: ${sofa.width.toFixed(2)} m, Höhe: ${sofa.height.toFixed(2)} m`;
+    document.getElementById('sofa-area').textContent = `Fläche: ${(sofa.width * sofa.height).toFixed(2)} m²`;
+    document.getElementById('collision-loss').textContent = `Kollisionsverlust: ${currentLoss.toExponential(3)}`;
+    document.getElementById('stable-frames').textContent = `Stabile Frames: ${stableFrames} / 100`;
+
+    // 4. Zeichne den aktuellen Zustand.
+    draw();
+
+    // Fordere den nächsten Frame an.
+    requestAnimationFrame(simulationLoop);
+}
+
+/**
+ * Zeichnet die gesamte Simulation auf den Canvas.
+ */
+function draw() {
+    // Canvas leeren
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Setze den Ursprung in die obere linke Ecke des Korridors mit etwas Rand.
+    ctx.save();
+    ctx.translate(20, 20);
+
+    // 1. Zeichne den Korridor
+    ctx.strokeStyle = '#888';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    const w = Corridor.width * SCALE;
+    const l = Corridor.armLength * SCALE;
+    ctx.moveTo(0, l);
+    ctx.lineTo(0, 0);
+    ctx.lineTo(l, 0);
+    ctx.lineTo(l, w);
+    ctx.lineTo(w, w);
+    ctx.lineTo(w, l);
+    ctx.closePath();
+    ctx.stroke();
+
+    // Start- und Endpunkte markieren
+    ctx.fillStyle = 'lightgreen';
+    ctx.fillText('A', 0.5 * w - 5, 15);
+    ctx.fillStyle = 'red';
+    ctx.fillText('B', l - 15, 0.5 * w + 5);
+
+    // 2. Zeichne die "Geisterbilder" des Sofas entlang des Pfades.
+    const waypoints = Path.getWaypoints();
+    for (const wp of waypoints) {
+        sofa.setPosition(wp.x, wp.y, wp.rotation);
+        const corners = sofa.getCorners();
+        const loss = Corridor.calculateCollisionLoss(sofa);
+
+        ctx.beginPath();
+        ctx.moveTo(corners[0].x * SCALE, corners[0].y * SCALE);
+        for (let i = 1; i < corners.length; i++) {
+            ctx.lineTo(corners[i].x * SCALE, corners[i].y * SCALE);
         }
-        
-        // Gib dem Browser einen Moment Zeit, die ersten Badges zu rendern
-        setTimeout(async () => {
-            try {
-                // ✅ Schritt 2: Initialisiere das TF.js Backend (potenziell langsam)
-                setBadge('badge-backend', 'warn', 'Initialisiere...');
-                await tf.setBackend(!!document.createElement('canvas').getContext('webgl2') ? 'webgl' : 'wasm');
-                await tf.ready();
-                setBadge('badge-backend', 'success', `Backend: ${tf.getBackend().toUpperCase()}`);
-                
-                // ✅ Schritt 3: Initialisiere das KI-Modell (potenziell langsam)
-                setBadge('badge-ai-model', 'warn', 'Erstelle Netz...');
-                sofa = createSofa(0.9, 0.9);
-                Path.init(CONFIG.LEARNING_RATE); // Dieser Aufruf erstellt das neuronale Netz
-                currentPath = Path.getWaypoints();
-                setBadge('badge-ai-model', 'success', 'AI Bereit');
+        ctx.closePath();
 
-                // Schritt 4: Alles ist geladen, schalte die App frei
-                document.querySelector('#diag-content p').style.display = 'none';
-                draw();
-                startStopBtn.disabled = false;
-                startStopBtn.textContent = "Start";
-                console.log("Application is ready.");
+        // Farbe basierend auf Kollision wählen.
+        ctx.fillStyle = loss > 0.0001 ? 'rgba(255, 59, 48, 0.25)' : 'rgba(0, 123, 255, 0.15)';
+        ctx.fill();
+    }
 
-            } catch (error) {
-                // Wenn einer der Schritte fehlschlägt, fange den Fehler ab
-                console.error("Fehler während der KI-Initialisierung:", error);
-                setBadge('badge-backend', 'error', 'FEHLER');
-                setBadge('badge-ai-model', 'error', 'FEHLER');
-                alert(`Ein Fehler ist beim Laden der KI aufgetreten: ${error.message}`);
-            }
-        }, 100); // Kurze Verzögerung, um das Einfrieren der UI zu verhindern
-    };
-    
-    // UI-Events und Startpunkt (unverändert)
-    startStopBtn.addEventListener('click', () => { /* ... */ });
-    main();
+    // 3. Zeichne die Wegpunkte als gelbe Kreise.
+    ctx.fillStyle = '#f1c40f'; // Gelb
+    for (const wp of waypoints) {
+        ctx.beginPath();
+        ctx.arc(wp.x * SCALE, wp.y * SCALE, 3, 0, 2 * Math.PI);
+        ctx.fill();
+    }
 
-    // Definitionen der nicht geänderten Funktionen für Vollständigkeit
-    simulationLoop = async () => {
-        if (!isRunning) return;
-        const { path, collisionLoss } = Path.trainStep(sofa);
-        currentPath = path;
-        if (collisionLoss < 0.001) { stableCounter++; } else { stableCounter = 0; }
-        if (stableCounter > 100) {
-            phaseEl.textContent = "Erfolgreich! Vergrößere...";
-            sofa.grow(); stableCounter = 0;
-            Path.init(CONFIG.LEARNING_RATE);
-        } else { phaseEl.textContent = "Lerne Pfad..."; }
-        iteration++;
-        lossEl.textContent = collisionLoss.toFixed(4);
-        iterationEl.textContent = iteration;
-        areaEl.textContent = (sofa.width * sofa.height).toFixed(4);
-        draw();
-        await tf.nextFrame();
-        requestAnimationFrame(simulationLoop);
-    };
-    draw = () => {
-        const worldSize=4.0, scale=CONFIG.CANVAS_SIZE/worldSize;
-        ctx.fillStyle='#2a2a2a';ctx.fillRect(0,0,canvas.width,canvas.height);
-        const cW=Corridor.width*scale, cL=Corridor.armLength*scale;
-        ctx.fillStyle='#000000';ctx.fillRect(0,0,cW,cL);ctx.fillRect(0,cL-cW,cL,cW);
-        ctx.fillStyle="white";ctx.font="bold 20px sans-serif";ctx.textAlign="center";
-        ctx.fillText("A",cW/2,25);ctx.fillText("B",cL-20,cL-cW/2+8);
-        if (currentPath && currentPath.length > 0) {
-            for (let i = 0; i <= 10; i++) {
-                const p = i / 10;
-                const pos = Path._interpolatePath(currentPath, p);
-                sofa.setPosition(pos.x, pos.y, pos.rotation);
-                const loss = Corridor.calculateCollisionLoss(sofa);
-                ctx.save();
-                ctx.translate(sofa.x*scale,sofa.y*scale);ctx.rotate(sofa.rotation);
-                ctx.fillStyle = loss > 0.001 ? "rgba(220, 53, 69, 0.6)" : "rgba(0, 123, 255, 0.5)";
-                ctx.fillRect(-sofa.width/2*scale,-sofa.height/2*scale,sofa.width*scale,sofa.height*scale);
-                ctx.restore();
-            }
-        }
-    };
-    startStopBtn.addEventListener('click', () => { isRunning = !isRunning; startStopBtn.textContent = isRunning ? 'Stop' : 'Start'; if (isRunning) simulationLoop(); });
-});
+    ctx.restore();
+}
