@@ -21,13 +21,19 @@ const Sofa = {
         this.model = tf.sequential();
         this.model.add(tf.layers.dense({ inputShape: [2], units: 16, activation: 'tanh' }));
         this.model.add(tf.layers.dense({ units: 16, activation: 'tanh' }));
+        
         // Die Sigmoid-Aktivierung am Ende stellt sicher, dass der Output zwischen 0 und 1 liegt.
-        this.model.add(tf.layers.dense({ units: 1, activation: 'sigmoid' }));
+        // ✅ WICHTIG: Initialisiere den Bias negativ, um mit einem leeren Sofa zu starten.
+        this.model.add(tf.layers.dense({
+            units: 1,
+            activation: 'sigmoid',
+            biasInitializer: tf.initializers.constant({ value: -5 }) // Zwingt den Output am Anfang gegen 0
+        }));
 
         // Erstelle den Optimizer, der die Gewichte des Modells anpasst
         this.optimizer = tf.train.adam(learningRate);
 
-        console.log("Sofa module initialized successfully.");
+        console.log("Sofa module initialized successfully with a negative bias.");
     },
 
     /**
@@ -79,6 +85,7 @@ const Sofa = {
             return { loss: value, area: currentArea };
         });
 
+        // Konvertiere die Tensoren in normale Zahlen für die Rückgabe
         return { loss: loss.dataSync()[0], area: area.dataSync()[0] };
     },
 
@@ -89,13 +96,14 @@ const Sofa = {
      */
     getShape: function(resolution) {
         if (!this.model) return null;
+        
         return tf.tidy(() => {
             const grid = this._createGrid(resolution, 2.5);
             return this.model.predict(grid).dataSync();
         });
     },
 
-    // --- Private Hilfsfunktionen ---
+    // --- Private Hilfsfunktionen (intern für dieses Modul) ---
 
     _createGrid: (resolution, scale) => {
         const linspace = tf.linspace(-scale / 2, scale / 2, resolution);
