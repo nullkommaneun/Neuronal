@@ -21,15 +21,12 @@ function makeGrid(N){
   const W = N, H = Math.round(N*2/3);
   const xs = tf.linspace(-meters/2, meters/2, W);   // [W]
   const ys = tf.linspace(-meters/3, meters/3, H);   // [H]
-  // Meshgrid in 1D-Vektoren: X = xs wiederholt für jede Zeile; 
-  // Y = jeder y-Wert W-mal wiederholt
   const X = tf.tile(xs, [H]);                       // [H*W]
   const Y = tf.reshape(tf.tile(ys.expandDims(1), [1, W]), [H*W]); // [H*W]
   return {gridXY: tf.stack([X,Y],1), W, H, dA: (meters/W)*(meters/H)};
 }
 
 async function bootstrap(){
-  // Warte bis ErrorManager OK ist
   const wait = (cond)=> new Promise((resolve,reject)=>{
     let n=0; const id=setInterval(()=>{
       if(cond()){ clearInterval(id); resolve(); }
@@ -41,8 +38,6 @@ async function bootstrap(){
   path = initPath(8);
   opt = tf.train.adam(1e-3);
   GRID = makeGrid(res);
-
-  // UI aktivieren
   const ctr = document.getElementById('controls'); ctr.classList.remove('disabled');
   document.getElementById('reset').disabled=false;
   document.getElementById('opt').disabled=false;
@@ -76,18 +71,23 @@ async function stepOnce(){
   const v = await value.data(); const a = await area.data();
   document.getElementById('loss').textContent = v[0].toFixed(5);
   document.getElementById('area').textContent = a[0].toFixed(4);
-  drawFrame(ctx, {gridXY, W,H, hall, fGrid, poses});
+
+  // Prepare render data
+  const fData = Array.from(fGrid.dataSync());
+  const hData = Array.from(hall.dataSync());
+  drawFrame(ctx, {W,H, cw:canvas.width, ch:canvas.height, meters, fGridData:fData, hallMaskData:hData});
+
   Object.values(grads).forEach(g=>g.dispose());
   [fGrid,hall,area,smooth].forEach(t=>t.dispose());
 }
 
 async function loop(){
   try{
-    for(let i=0;i<30;i++){ await stepOnce(); document.getElementById('iter').textContent = String(Number(document.getElementById('iter').textContent)||0 + 1); }
+    for(let i=0;i<20;i++){ await stepOnce(); document.getElementById('iter').textContent = String(Number(document.getElementById('iter').textContent)||0 + 1); }
     requestAnimationFrame(loop);
   }catch(e){
     EM.log.push({type:'loop', msg:String(e), stack:e.stack||null});
-    EM.fatal=true; // Hard stop
+    EM.fatal=true;
   }
 }
 
