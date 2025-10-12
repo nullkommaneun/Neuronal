@@ -1,87 +1,65 @@
 /**
  * @file path.js
- * @description Finale, stabile KI. Eine massiv erhöhte Kollisionsstrafe
- * zwingt die KI, Sicherheit über alles andere zu stellen.
+ * @description Finale KI. Gibt nur noch Bewegungsbefehle aus (vor, links, rechts).
+ * Die eigentliche Physik wird von app.js übernommen.
  */
 const Path = {
+    model: null,
     optimizer: null,
-    numWaypoints: 15,
-    pathDeltas: null,
 
+    // Das Gehirn der KI: Ein einfaches neuronales Netz
     init: function(learningRate) {
-        if (this.pathDeltas) tf.dispose(this.pathDeltas);
-        
-        const initialDeltas = [];
-        const startPos = { x: 0.5, y: Corridor.armLength - 0.5 };
-        const endPos = { x: Corridor.armLength - 0.5, y: 0.5 };
+        // Das Netz nimmt die Position und Rotation des Sofas sowie die Zielposition als Input
+        // und gibt 3 Werte aus: die Wahrscheinlichkeit für "vorwärts", "links drehen", "rechts drehen".
+        this.model = tf.sequential();
+        this.model.add(tf.layers.dense({inputShape: [4], units: 16, activation: 'relu'}));
+        this.model.add(tf.layers.dense({units: 3, activation: 'softmax'})); // 3 Aktionen
 
-        let lastX = startPos.x;
-        let lastY = startPos.y;
-        for (let i = 0; i < this.numWaypoints - 1; i++) {
-            const t = (i + 1) / (this.numWaypoints - 1);
-            const nextX = startPos.x + t * (endPos.x - startPos.x);
-            const nextY = startPos.y + t * (endPos.y - startPos.y);
-            
-            const dx = nextX - lastX;
-            const dy = nextY - lastY;
-            
-            initialDeltas.push(dx, dy, 0);
-            
-            lastX = nextX;
-            lastY = nextY;
-        }
-        
-        this.pathDeltas = tf.variable(tf.tensor(initialDeltas, [this.numWaypoints - 1, 3]));
         this.optimizer = tf.train.adam(learningRate);
     },
 
-    getWaypoints: function() {
+    /**
+     * Entscheidet die nächste Aktion basierend auf der aktuellen Situation.
+     * @param {object} sofaState - {x, y, rotation, goalX, goalY}
+     * @returns {number} - 0 (vor), 1 (links), 2 (rechts)
+     */
+    getAction: function(sofaState) {
         return tf.tidy(() => {
-            const deltas = this.pathDeltas.arraySync();
-            const waypoints = [];
-            const startPoint = { x: 0.5, y: Corridor.armLength - 0.5, rotation: 0 };
-            waypoints.push(startPoint);
-            let currentPoint = startPoint;
-            for (let i = 0; i < this.numWaypoints - 1; i++) {
-                const delta = deltas[i];
-                const nextPoint = {
-                    x: currentPoint.x + delta[0],
-                    y: currentPoint.y + delta[1],
-                    rotation: currentPoint.rotation + delta[2]
-                };
-                waypoints.push(nextPoint);
-                currentPoint = nextPoint;
-            }
-            return waypoints;
+            const inputTensor = tf.tensor2d([Object.values(sofaState)]);
+            const predictions = this.model.predict(inputTensor);
+            // Wähle die Aktion mit der höchsten Wahrscheinlichkeit
+            return tf.argMax(predictions, 1).dataSync()[0];
         });
     },
 
-    trainStep: function(sofa) {
-        const variables = [this.pathDeltas];
-        this.optimizer.minimize(() => {
-            let totalCollisionLoss = 0;
-            const waypoints = this.getWaypoints();
-            for (const wp of waypoints) {
-                sofa.setPosition(wp.x, wp.y, wp.rotation);
-                totalCollisionLoss += Corridor.calculateCollisionLoss(sofa);
-            }
-            const collisionLossTensor = tf.scalar(totalCollisionLoss / waypoints.length);
+    /**
+     * Lernt aus den Konsequenzen seiner Aktionen.
+     * @param {Array} history - Eine Liste von Zuständen und den daraus resultierenden Belohnungen.
+     */
+    trainStep: function(history) {
+        // HINWEIS: Dies ist eine vereinfachte Form des Reinforcement Learning.
+        // Wir belohnen Aktionen, die zu einer Verringerung der Zieldistanz führten
+        // und bestrafen Aktionen, die in einer Kollision endeten.
 
-            const lastWaypoint = waypoints[waypoints.length - 1];
-            const goalPosition = { x: Corridor.armLength - 0.5, y: 0.5 };
-            const dx = goalPosition.x - lastWaypoint.x;
-            const dy = goalPosition.y - lastWaypoint.y;
-            const distanceToGoal = tf.scalar(Math.sqrt(dx*dx + dy*dy));
+        const lossFunction = () => {
+            return tf.tidy(() => {
+                let totalLoss = tf.scalar(0);
+                for (const step of history) {
+                    const { state, action, reward } = step;
+                    const inputTensor = tf.tensor2d([Object.values(state)]);
+                    const predictedActionProbabilities = this.model.predict(inputTensor);
+                    
+                    // Wir wollen die Wahrscheinlichkeit der gewählten Aktion erhöhen, wenn die Belohnung positiv war,
+                    // und sie verringern, wenn sie negativ war.
+                    const targetActionTensor = tf.oneHot(tf.tensor1d([action], 'int32'), 3);
+                    const loss = tf.losses.meanSquaredError(targetActionTensor.mul(reward), predictedActionProbabilities);
+                    totalLoss = totalLoss.add(loss);
+                }
+                return totalLoss.div(history.length);
+            });
+        };
 
-            // HIER IST DIE FINALE ÄNDERUNG:
-            // Wir machen den "Stock" 100x schmerzhafter als vorher.
-            const COLLISION_WEIGHT = 5000.0; 
-            const GOAL_WEIGHT = 1.0;
-            const finalLoss = collisionLossTensor.mul(COLLISION_WEIGHT).add(distanceToGoal.mul(GOAL_WEIGHT));
-            
-            const dummyLoss = this.pathDeltas.sum().mul(0);
-            return finalLoss.add(dummyLoss);
-            
-        }, /* returnCost */ false, variables);
+        const grads = tf.grad(lossFunction)(this.model.getWeights().map(w => w.val));
+        this.optimizer.applyGradients(this.model.getWeights().map((w, i) => ({var: w.val, grad: grads[i]})));
     }
 };
