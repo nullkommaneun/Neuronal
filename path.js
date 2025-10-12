@@ -1,7 +1,7 @@
 /**
  * @file path.js
- * @description Finale, autonome KI mit "Karotte und Stock"-Belohnungssystem.
- * Die KI wird für die Nähe zum Ziel belohnt und für Kollisionen bestraft.
+ * @description Finale, autonome KI. Eine neue "Pfadlängen"-Strafe
+ * zwingt die KI zu einem echten, zusammenhängenden Pfad.
  */
 const Path = {
     optimizer: null,
@@ -36,7 +36,7 @@ const Path = {
             
             // --- Teil 1: Der "Stock" (Bestrafung für Kollisionen) ---
             let totalCollisionLoss = 0;
-            const waypoints = this.getWaypoints();
+            const waypoints = this.getWaypoints(); // Brauchen wir für die JS-Physik
             for (const wp of waypoints) {
                 sofa.setPosition(wp.x, wp.y, wp.rotation);
                 totalCollisionLoss += Corridor.calculateCollisionLoss(sofa);
@@ -44,20 +44,28 @@ const Path = {
             const collisionLossTensor = tf.scalar(totalCollisionLoss / waypoints.length);
 
             // --- Teil 2: Die "Karotte" (Belohnung für Nähe zum Ziel) ---
-            // Wir holen den letzten Wegpunkt direkt aus dem Tensor, um die Gradienten-Kette zu erhalten.
-            const lastWaypoint = this.pathWaypoints.slice([this.numWaypoints - 1, 0], [1, 2]).squeeze(); // Nur x,y
-            const goalPosition = tf.tensor1d([Corridor.armLength - 0.5, 0.5]); // Feste Koordinaten von Punkt B
-
-            // Berechne die Distanz zum Ziel. Wir verwenden die Distanz selbst, nicht das Quadrat.
+            const lastWaypoint = this.pathWaypoints.slice([this.numWaypoints - 1, 0], [1, 2]).squeeze();
+            const goalPosition = tf.tensor1d([Corridor.armLength - 0.5, 0.5]);
             const distanceToGoal = tf.sqrt(tf.sum(tf.square(goalPosition.sub(lastWaypoint))));
 
-            // --- Teil 3: Kombiniere Stock und Karotte ---
-            const COLLISION_WEIGHT = 20.0; // Der Stock ist 20x schmerzhafter als die Karotte süß ist.
-            const GOAL_WEIGHT = 1.0;      // Die Karotte lockt die KI in die richtige Richtung.
+            // --- NEU - Teil 3: Die "Kette" (Bestrafung für Sprünge/Faulheit) ---
+            let pathLengthLoss = tf.scalar(0);
+            for (let i = 0; i < this.numWaypoints - 1; i++) {
+                const p1 = this.pathWaypoints.slice([i, 0], [1, 2]).squeeze();
+                const p2 = this.pathWaypoints.slice([i + 1, 0], [1, 2]).squeeze();
+                // Addiere die Distanz zwischen jedem Punktpaar zum Verlust
+                pathLengthLoss = pathLengthLoss.add(tf.sqrt(tf.sum(tf.square(p2.sub(p1)))));
+            }
 
-            const finalLoss = collisionLossTensor.mul(COLLISION_WEIGHT).add(distanceToGoal.mul(GOAL_WEIGHT));
+            // --- Teil 4: Kombiniere alle drei Faktoren ---
+            const COLLISION_WEIGHT = 20.0;  // Kollisionen sind sehr schlecht
+            const GOAL_WEIGHT = 1.0;       // Das Ziel ist wichtig
+            const PATH_LENGTH_WEIGHT = 0.5; // Faulheit ist moderat schlecht
+
+            const finalLoss = collisionLossTensor.mul(COLLISION_WEIGHT)
+                              .add(distanceToGoal.mul(GOAL_WEIGHT))
+                              .add(pathLengthLoss.mul(PATH_LENGTH_WEIGHT));
             
-            // Der Trick, der die Verbindung für den Gradienten garantiert.
             const dummyLoss = this.pathWaypoints.sum().mul(0);
             return finalLoss.add(dummyLoss);
             
