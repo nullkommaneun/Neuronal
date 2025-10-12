@@ -6,18 +6,10 @@
 
 window.addEventListener('DOMContentLoaded', main);
 
-// Globale Variablen
-let canvas, ctx;
-let sofa;
+let canvas, ctx, sofa, startButton, pauseButton;
 const SCALE = 100;
-let collisionLossHistory = [];
 let stableFrames = 0;
-
-// Steuerung
 let isRunning = false;
-let startButton, pauseButton;
-
-// Animation
 let currentWaypointIndex = 0;
 let frameCounter = 0;
 const ANIMATION_SPEED = 4;
@@ -41,17 +33,35 @@ async function main() {
     updateBadge('badge-tf', tfLoaded);
     if (!tfLoaded) return;
     await new Promise(resolve => setTimeout(resolve, 50));
+    
     canvas = document.getElementById('simulationCanvas');
     ctx = canvas.getContext('2d');
-    sofa = createSofa(0.5, 0.5); // Start mit einem kleinen Sofa
+    sofa = createSofa(0.5, 0.5); // Starte mit einem kleinen Sofa
     startButton = document.getElementById('startButton');
     pauseButton = document.getElementById('pauseButton');
     updateBadge('badge-backend', true);
     await new Promise(resolve => setTimeout(resolve, 50));
+    
     Path.init(0.01);
     updateBadge('badge-ai', true);
+    
     setupControls();
+    
+    // NEU: UI einmal beim Start aktualisieren, um korrekte Werte anzuzeigen.
+    updateUI(0); // Initialer Verlust ist 0
+    
     draw();
+}
+
+/**
+ * NEU: Kapselt die Logik zur Aktualisierung der Info-Panels.
+ * @param {number} loss - Der aktuelle Kollisionsverlust.
+ */
+function updateUI(loss) {
+    document.getElementById('sofa-size').textContent = `Breite: ${sofa.width.toFixed(2)} m, Höhe: ${sofa.height.toFixed(2)} m`;
+    document.getElementById('sofa-area').textContent = `Fläche: ${(sofa.width * sofa.height).toFixed(2)} m²`;
+    document.getElementById('collision-loss').textContent = `Kollisionsverlust: ${loss.toExponential(3)}`;
+    document.getElementById('stable-frames').textContent = `Stabile Frames: ${stableFrames} / 100`;
 }
 
 function setupControls() {
@@ -74,7 +84,9 @@ function setupControls() {
 
 function simulationLoop() {
     if (!isRunning) return;
+    
     Path.trainStep(sofa);
+    
     const waypoints = Path.getWaypoints();
     let currentLoss = 0;
     for (const wp of waypoints) {
@@ -82,6 +94,7 @@ function simulationLoop() {
         currentLoss += Corridor.calculateCollisionLoss(sofa);
     }
     currentLoss /= waypoints.length;
+    
     if (currentLoss < 0.001) {
         stableFrames++;
     } else {
@@ -92,15 +105,16 @@ function simulationLoop() {
         Path.init(0.01);
         stableFrames = 0;
     }
+    
     frameCounter++;
     if (frameCounter >= ANIMATION_SPEED) {
         frameCounter = 0;
         currentWaypointIndex = (currentWaypointIndex + 1) % Path.numWaypoints;
     }
-    document.getElementById('sofa-size').textContent = `Breite: ${sofa.width.toFixed(2)} m, Höhe: ${sofa.height.toFixed(2)} m`;
-    document.getElementById('sofa-area').textContent = `Fläche: ${(sofa.width * sofa.height).toFixed(2)} m²`;
-    document.getElementById('collision-loss').textContent = `Kollisionsverlust: ${currentLoss.toExponential(3)}`;
-    document.getElementById('stable-frames').textContent = `Stabile Frames: ${stableFrames} / 100`;
+    
+    // GEÄNDERT: Rufe die neue, saubere UI-Update-Funktion auf.
+    updateUI(currentLoss);
+    
     draw();
     requestAnimationFrame(simulationLoop);
 }
@@ -109,8 +123,6 @@ function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.save();
     ctx.translate(20, 20);
-
-    // Korridor zeichnen
     ctx.strokeStyle = '#888';
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -118,13 +130,10 @@ function draw() {
     const l = Corridor.armLength * SCALE;
     ctx.moveTo(0, l); ctx.lineTo(0, 0); ctx.lineTo(l, 0); ctx.lineTo(l, w);
     ctx.lineTo(w, w); ctx.lineTo(w, l); ctx.closePath(); ctx.stroke();
-
-    // GEÄNDERT: A/B-Markierungen an die neue Route anpassen
     ctx.fillStyle = 'lightgreen';
-    ctx.fillText('A', 0.5 * w - 5, l - 5); // A ist jetzt UNTEN
+    ctx.fillText('A', 0.5 * w - 5, l - 5);
     ctx.fillStyle = 'red';
-    ctx.fillText('B', l - 15, 0.5 * w + 5); // B bleibt RECHTS
-
+    ctx.fillText('B', l - 15, 0.5 * w + 5);
     if (Path.pathAdjustments) {
         const waypoints = Path.getWaypoints();
         ctx.fillStyle = '#f1c40f';
@@ -149,6 +158,5 @@ function draw() {
         ctx.lineWidth = 1.5;
         ctx.stroke();
     }
-    
     ctx.restore();
 }
