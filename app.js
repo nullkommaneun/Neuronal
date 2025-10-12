@@ -1,6 +1,6 @@
 /**
  * @file app.js
- * @description Robuste, auf Klick initialisierende Anwendungslogik.
+ * @description Finale Version mit korrekter "Mission Accomplished"-Erfolgsbedingung.
  */
 window.addEventListener('DOMContentLoaded', setupPage);
 
@@ -71,17 +71,31 @@ function simulationLoop() {
         }
         currentLoss /= waypoints.length;
         if (isNaN(currentLoss)) throw new Error("Kollisionsverlust ist NaN.");
-        if (currentLoss < 0.001) {
+
+        // HIER IST DIE NEUE, KORREKTE ERFOLGSBEDINGUNG
+        const lastWaypoint = waypoints[waypoints.length - 1];
+        const goalPosition = { x: Corridor.armLength - 0.5, y: 0.5 };
+        const dx = goalPosition.x - lastWaypoint.x;
+        const dy = goalPosition.y - lastWaypoint.y;
+        const distanceToGoal = Math.sqrt(dx*dx + dy*dy);
+        
+        // Definiere die Schwelle für "nah genug am Ziel"
+        const GOAL_THRESHOLD = 0.2; // 20cm Toleranz
+
+        // BEIDE Bedingungen müssen erfüllt sein!
+        if (currentLoss < 0.001 && distanceToGoal < GOAL_THRESHOLD) {
             stableFrames++;
         } else {
             stableFrames = 0;
         }
+
         if (stableFrames > 100) {
             sofa.grow();
             Path.init(0.01);
             stableFrames = 0;
-            logMessage(`Erfolg! Sofa wächst auf ${sofa.width.toFixed(2)}m.`, 'info');
+            logMessage(`MISSION ERFÜLLT! Sofa wächst auf ${sofa.width.toFixed(2)}m.`, 'info');
         }
+
         frameCounter++;
         if (frameCounter >= ANIMATION_SPEED) {
             frameCounter = 0;
@@ -99,10 +113,10 @@ function simulationLoop() {
     }
 }
 
+// ... (Restliche Hilfsfunktionen bleiben unverändert) ...
 function logMessage(o, e = "info") { if (!logContainer) return; const t = document.createElement("div"); t.className = `log-entry ${e}`, t.textContent = `[${(new Date).toLocaleTimeString()}] ${o}`, logContainer.appendChild(t), logContainer.scrollTop = logContainer.scrollHeight }
 function updateBadge(o, e) { const t = document.getElementById(o); t && (t.className = `badge ${e?"success":"pending"}`) }
 function updateUI(o) { sofa && (document.getElementById("sofa-size").textContent = `Breite: ${sofa.width.toFixed(2)} m, Höhe: ${sofa.height.toFixed(2)} m`, document.getElementById("sofa-area").textContent = `Fläche: ${(sofa.width*sofa.height).toFixed(2)} m²`, document.getElementById("collision-loss").textContent = `Kollisionsverlust: ${o.toExponential(3)}`, document.getElementById("stable-frames").textContent = `Stabile Frames: ${stableFrames}/ 100`) }
-
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (!sofa) return;
@@ -121,12 +135,8 @@ function draw() {
     ctx.fillStyle = 'red';
     ctx.fillText('B', l - 15, 0.5 * w + 5);
 
-    // HIER IST DIE KORREKTUR:
-    // Wir prüfen jetzt auf die neue, korrekte Variable 'pathDeltas'.
     if (Path.pathDeltas) {
         const waypoints = Path.getWaypoints();
-        // Wir zeichnen die Wegpunkte nicht mehr.
-        
         const currentWaypoint = waypoints[currentWaypointIndex];
         sofa.setPosition(currentWaypoint.x, currentWaypoint.y, currentWaypoint.rotation);
         const corners = sofa.getCorners();
