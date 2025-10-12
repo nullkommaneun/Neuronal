@@ -9,22 +9,20 @@
 </head>
 <body>
     <div id="diag-overlay">
-        <div id="diag-header">
-            <h3>Neural Sofa Explorer</h3>
-            <button id="minimize-diag">-</button>
+    <div id="diag-content">
+        <p>Initialisiere System...</p>
+        <div class="badge-container">
+            <span class="badge" id="badge-js">JS</span>
+            <span class="badge" id="badge-corridor">Korridor</span>
+            <span class="badge" id="badge-sofa">Sofa</span>
+            <span class="badge" id="badge-path">Pilot</span>
+            <span class="badge" id="badge-tfjs">TF.js</span>
+            <span class="badge" id="badge-backend">Backend</span>
+            <span class="badge" id="badge-ai-model">AI Model</span>
         </div>
-        <div id="diag-content">
-            <p>Initialisiere System...</p>
-            <div class="badge-container">
-                <span class="badge" id="badge-js">JS</span>
-                <span class="badge" id="badge-corridor">Korridor</span>
-                <span class="badge" id="badge-sofa">Sofa</span>
-                <span class="badge" id="badge-path">Pilot</span>
-                <span class="badge" id="badge-tfjs">TF.js</span>
-                <span class="badge" id="badge-backend">Backend</span>
-                <span class="badge" id="badge-webgl">WebGL2</span>
-                <span class="badge" id="badge-wasm">WASM</span>
-            </div>
+        </div>
+</div>
+
             <div id="error-log-container" style="display: none;">
                 <h4>Fehlerprotokoll:</h4>
                 <pre id="error-log"></pre>
