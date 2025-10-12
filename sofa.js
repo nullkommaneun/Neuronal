@@ -1,21 +1,18 @@
 // sofa.js
 function createSofa(width, height) {
-    // Das ist unser Sofa-Objekt.
-    const sofa = {
+    return {
         width: width,
         height: height,
-        x: Corridor.width / 2, // Startposition Mitte A
+        x: Corridor.width / 2, // Start position
         y: 0,
-        rotation: 0, // in Radiant
+        rotation: 0,
 
-        // Setzt die Position und Rotation neu
         setPosition: function(x, y, rotation) {
             this.x = x;
             this.y = y;
             this.rotation = rotation;
         },
 
-        // Berechnet die vier Ecken in der Welt
         getCorners: function() {
             const halfW = this.width / 2;
             const halfH = this.height / 2;
@@ -33,13 +30,9 @@ function createSofa(width, height) {
             }));
         },
 
-        // Vergrößert das Sofa für den nächsten Versuch
         grow: function() {
             this.width *= 1.05;
             this.height *= 1.05;
         }
     };
-    return sofa;
 }
-
-console.log("✅ sofa.js loaded");
