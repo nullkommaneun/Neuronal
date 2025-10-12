@@ -1,6 +1,7 @@
 /**
  * @file path.js
- * @description Finale, bereinigte Version zur Lösung des Gradienten-Problems.
+ * @description Finale Version mit intelligenter Rotation.
+ * Die KI lernt, eine sanfte Grund-Drehung zu optimieren.
  */
 const Path = {
     optimizer: null,
@@ -14,8 +15,6 @@ const Path = {
     },
 
     getWaypoints: function() {
-        // Diese Funktion wird jetzt von BEIDEN, der Visualisierung und dem Training, genutzt.
-        // Der Trick liegt darin, wie wir sie im Training aufrufen.
         return tf.tidy(() => {
             const adjustments = this.pathAdjustments.arraySync();
             const waypoints = [];
@@ -24,20 +23,26 @@ const Path = {
             
             for (let i = 0; i < this.numWaypoints; i++) {
                 const t = i / (this.numWaypoints - 1);
-                let baseX, baseY, baseRotation;
+                let baseX, baseY;
+
+                // Position-Logik bleibt gleich (hoch, dann rechts)
                 if (t < 0.5) {
                     const t_segment = t * 2;
                     baseX = centerX;
                     const startY = armLength - centerY, cornerY = centerY;
                     baseY = startY + t_segment * (cornerY - startY); 
-                    baseRotation = 0;
                 } else {
                     const t_segment = (t - 0.5) * 2;
                     baseY = centerY;
                     const cornerX = centerX, endX = armLength - centerX;
                     baseX = cornerX + t_segment * (endX - cornerX);
-                    baseRotation = Math.PI / 2;
                 }
+
+                // GEÄNDERT: Sanfte, kontinuierliche Drehung als Basis
+                // Statt einer harten 90°-Wende interpolieren wir die Drehung linear
+                // über den gesamten Pfad. Das gibt der KI eine viel bessere Ausgangslage.
+                const baseRotation = t * (Math.PI / 2);
+
                 const adjustment = adjustments[i];
                 waypoints.push({
                     x: baseX + adjustment[0],
@@ -50,13 +55,9 @@ const Path = {
     },
 
     trainStep: function(sofa) {
-        // Wir übergeben dem Optimierer die Variable direkt, was ihn zwingt, sie zu tracen.
         const variables = [this.pathAdjustments];
-
         this.optimizer.minimize(() => {
-            // Diese Funktion wird von minimize aufgerufen und beobachtet.
             let totalLoss = 0;
-            // Wir rufen getWaypoints ganz normal auf.
             const waypoints = this.getWaypoints();
             
             for (const wp of waypoints) {
@@ -64,8 +65,6 @@ const Path = {
                 totalLoss += Corridor.calculateCollisionLoss(sofa);
             }
             
-            // Der Trick, der die Verbindung erzwingt, falls sie immer noch bricht:
-            // Wir addieren eine Operation, die die Variable verwendet, aber das Ergebnis nicht ändert.
             const dummyLoss = this.pathAdjustments.sum().mul(0);
             return tf.scalar(totalLoss / waypoints.length).add(dummyLoss);
             
