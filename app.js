@@ -6,7 +6,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const ctx = canvas.getContext('2d');
     const startStopBtn = document.getElementById('start-stop-btn');
     const exportSvgBtn = document.getElementById('export-svg-btn');
-    // ... weitere UI-Elemente ...
     const areaEl = document.getElementById('metric-area');
     const lossEl = document.getElementById('metric-loss');
     const iterationEl = document.getElementById('metric-iteration');
@@ -20,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let iteration = 0;
     let CONFIG;
 
-    const CONFIG_MODES = { /* ... unverändert ... */ 
+    const CONFIG_MODES = {
         fast: { GRID_RESOLUTION: 32, RENDER_RESOLUTION: 64, COLLISION_STEPS: 15, TRAINING_STEPS_PER_FRAME: 5, LEARNING_RATE: 0.015, LAMBDA_COLLISION: 2.5 },
         quality: { GRID_RESOLUTION: 50, RENDER_RESOLUTION: 96, COLLISION_STEPS: 20, TRAINING_STEPS_PER_FRAME: 5, LEARNING_RATE: 0.015, LAMBDA_COLLISION: 2.5 }
     };
@@ -38,18 +37,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const runInitialDiagnostics = () => {
         setBadgeStatus('badge-js', 'success', 'JS OK');
-        // Check für Corridor-Modul
         if (typeof Corridor?.calculateCollision !== 'function') { setBadgeStatus('badge-corridor', 'error', 'Korridor FEHLT'); return false; }
         setBadgeStatus('badge-corridor', 'success', 'Korridor OK');
-        
-        // ✅ NEUER CHECK für Sofa-Modul
-        if (typeof Sofa?.init !== 'function' || typeof Sofa?.trainStep !== 'function') {
-            setBadgeStatus('badge-sofa', 'error', 'Sofa FEHLT');
-            return false;
-        }
+        if (typeof Sofa?.init !== 'function' || typeof Sofa?.trainStep !== 'function' || typeof Sofa?.getShape !== 'function') { setBadgeStatus('badge-sofa', 'error', 'Sofa FEHLT'); return false; }
         setBadgeStatus('badge-sofa', 'success', 'Sofa OK');
-        
-        // Restliche Checks...
         if(typeof tf==='undefined'){setBadgeStatus('badge-tfjs','error','TF.js Failed');return false;}
         setBadgeStatus('badge-tfjs','warn','TF.js Geladen');
         if(!!document.createElement('canvas').getContext('webgl2')) setBadgeStatus('badge-webgl','success','WebGL2 OK'); else setBadgeStatus('badge-webgl','warn','WebGL2 N/A');
@@ -57,8 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
         return true;
     };
     
-    const initializeTFBackend = async () => { /* ... unverändert ... */ 
-        try { setBadgeStatus('badge-backend','warn','Initialisiere...'); await tf.setBackend(!!document.createElement('canvas').getContext('webgl2')?'webgl':'wasm'); await tf.ready(); const backend=tf.getBackend(); setBadgeStatus('badge-backend','success',`Backend: ${backend.toUpperCase()}`); return true;} catch(e) { setBadgeStatus('badge-backend','error','Backend Failed'); return false;}
+    const initializeTFBackend = async () => {
+        try { setBadgeStatus('badge-backend','warn','Initialisiere...'); await tf.setBackend(!!document.createElement('canvas').getContext('webgl2')?'webgl':'wasm'); await tf.ready(); const backend=tf.getBackend(); setBadgeStatus('badge-backend','success',`Backend: ${backend.toUpperCase()}`); return true;}
+        catch(e) { setBadgeStatus('badge-backend','error','Backend Failed'); return false;}
     };
 
     // --- UI-Events ---
@@ -74,20 +66,18 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isRunning) return;
         
         let totalLoss = 0, finalArea = 0;
-        // Ruft das Training im Sofa-Modul auf
         for (let i = 0; i < CONFIG.TRAINING_STEPS_PER_FRAME; i++) {
-            const { loss, area } = Sofa.trainStep(CONFIG); // ✅ SAUBERER AUFRUF
+            const { loss, area } = Sofa.trainStep(CONFIG);
             totalLoss += loss;
             finalArea = area;
             iteration++;
         }
 
-        // Aktualisiert die UI
         areaEl.textContent = finalArea.toFixed(4);
         lossEl.textContent = (totalLoss / CONFIG.TRAINING_STEPS_PER_FRAME).toFixed(4);
         iterationEl.textContent = iteration;
         
-        draw(); // Zeichnet das Ergebnis
+        draw();
         
         await tf.nextFrame();
         requestAnimationFrame(optimizationLoop);
@@ -95,34 +85,57 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Visualisierung ---
     const draw = () => {
-        // Zeichne den Korridor (unverändert)
         const scale = CONFIG.CANVAS_SIZE / 2.5;
         const center = CONFIG.CANVAS_SIZE / 2;
         const halfW = (Corridor.width * scale) / 2;
-        ctx.fillStyle = '#2a2a2a';
+
+        // --- Korridor zeichnen (unverändert) ---
+        ctx.fillStyle = '#2a2a2a'; // Dunkles Grau für Wände
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#000000';
+        ctx.fillStyle = '#000000'; // Schwarz für den freien Weg
         ctx.fillRect(center - halfW, 0, halfW * 2, center + halfW);
         ctx.fillRect(center - halfW, center - halfW, canvas.width, halfW * 2);
 
-        // ✅ SAUBERER AUFRUF: Hol die Sofa-Form vom Sofa-Modul
-        const shapeValues = Sofa.getShape(CONFIG.RENDER_RESOLUTION);
-        if (!shapeValues) return; // Wenn das Modell noch nicht initialisiert ist
+        // --- ✅ NEU: Sofa in Bewegung visualisieren ---
+        const sofaShapeData = Sofa.getShape(CONFIG.RENDER_RESOLUTION);
+        if (!sofaShapeData) return;
 
-        // Zeichne das Sofa (unverändert)
-        const imageData = ctx.createImageData(CONFIG.RENDER_RESOLUTION, CONFIG.RENDER_RESOLUTION);
-        for (let i = 0; i < shapeValues.length; i++) {
-            const a = shapeValues[i] * 255;
-            imageData.data[i*4]=0; imageData.data[i*4+1]=123; imageData.data[i*4+2]=255; imageData.data[i*4+3]=a;
+        // Erzeuge ein temporäres Canvas für das Sofa in seiner Grundform
+        const sofaBaseCanvas = document.createElement('canvas');
+        sofaBaseCanvas.width = CONFIG.RENDER_RESOLUTION;
+        sofaBaseCanvas.height = CONFIG.RENDER_RESOLUTION;
+        const sofaBaseCtx = sofaBaseCanvas.getContext('2d');
+        const imageData = sofaBaseCtx.createImageData(CONFIG.RENDER_RESOLUTION, CONFIG.RENDER_RESOLUTION);
+
+        for (let i = 0; i < sofaShapeData.length; i++) {
+            const alpha = sofaShapeData[i] * 255;
+            imageData.data[i*4]=0; imageData.data[i*4+1]=123; imageData.data[i*4+2]=255; imageData.data[i*4+3]=alpha;
         }
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = CONFIG.RENDER_RESOLUTION; tempCanvas.height = CONFIG.RENDER_RESOLUTION;
-        tempCanvas.getContext('2d').putImageData(imageData, 0, 0);
-        ctx.save();
-        ctx.translate(center, center); ctx.scale(scale, -scale); ctx.translate(-1.25, -1.25);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(tempCanvas, 0, 0, 2.5, 2.5);
-        ctx.restore();
+        sofaBaseCtx.putImageData(imageData, 0, 0);
+
+        // Zeichne das Sofa in mehreren Phasen seiner Bewegung
+        const visualizationSteps = 5; // Anzahl der "Geisterbilder" des Sofas
+        for (let i = 0; i <= visualizationSteps; i++) {
+            const t = i / visualizationSteps; // Fortschritt von 0 bis 1
+            const angle = -Math.PI / 2 * t; // Winkeländerung
+            const offsetX = t < 0.5 ? 0 : (t - 0.5) * 2; // X-Verschiebung
+            const offsetY = t > 0.5 ? 0 : (0.5 - t) * 2; // Y-Verschiebung
+
+            ctx.save();
+            ctx.translate(center, center); // Zum Mittelpunkt des Korridors
+            ctx.scale(scale, -scale);     // Skalierung und Y-Achse invertieren
+            ctx.translate(-1.25, -1.25);  // Ursprung des Sofas anpassen
+
+            // Wende die Transformationen für die Bewegung an
+            ctx.translate(offsetX, offsetY);
+            ctx.rotate(angle);
+            
+            ctx.globalAlpha = 0.3 + (t * 0.7 / visualizationSteps); // Leichte Transparenz, wird am Ende klarer
+
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(sofaBaseCanvas, 0, 0, 2.5, 2.5); // Zeichne das Sofa
+            ctx.restore();
+        }
     };
 
     // --- App Start ---
@@ -135,7 +148,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const backendReady = await initializeTFBackend();
             if (!backendReady) { alert("KI-Backend konnte nicht starten."); startStopBtn.textContent="Fehler"; return; }
             
-            // ✅ Initialisiere das Sofa-Modell
             Sofa.init(CONFIG.LEARNING_RATE);
 
             document.querySelector('#diag-content p').style.display = 'none';
