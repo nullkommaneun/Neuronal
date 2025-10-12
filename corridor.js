@@ -3,47 +3,27 @@
  * @description Definiert die physische Umgebung (L-förmiger Korridor) und die Logik zur Kollisionserkennung.
  */
 
-// VERMERK: Das Corridor-Objekt kapselt die gesamte Umgebungslogik.
-// Die Dimensionen sind in Metern definiert und werden später für die Canvas-Visualisierung skaliert.
 const Corridor = {
-    // Definiert die Breite beider Arme des Korridors.
-    width: 1.0, 
-    // Definiert die Länge der äußeren Kante jedes Arms.
-    armLength: 3.0, 
+    width: 1.0,
+    armLength: 3.0,
+    walls: [], // Behalten für potenzielle zukünftige, detailliertere Physik
 
-    // Die "Wände" werden als Liniensegmente definiert: [x1, y1, x2, y2].
-    // Dies ermöglicht eine präzise, vektorbasierte Kollisionsberechnung.
-    walls: [],
-
-    /**
-     * Initialisiert die Wandkoordinaten basierend auf den Korridor-Dimensionen.
-     * Diese Methode wird einmal beim Start aufgerufen.
-     */
     init: function() {
+        // Die explizite Wanddefinition wird für die neue Logik nicht direkt verwendet,
+        // bleibt aber für die Visualisierung oder andere Berechnungen erhalten.
         const w = this.width;
         const l = this.armLength;
-        
-        // Die Wände des L-förmigen Korridors:
-        // Ein vertikaler Arm von (0,0) bis (w,l) und ein horizontaler von (0,0) bis (l,w).
         this.walls = [
-            // Vertikaler Arm
-            [0, 0, 0, l],      // Linke Wand
-            [w, 0, w, l - w],  // Rechte Innenwand
-            // Horizontaler Arm
-            [0, 0, l, 0],      // Obere Wand
-            [0, w, l - w, w],  // Untere Innenwand
-            // Äußere Ecken verbinden
-            [l, 0, l, w],      // Rechte Außenwand
-            [0, l, w, l]       // Untere Außenwand
+            [0, 0, 0, l], [w, 0, w, l - w], [0, 0, l, 0],
+            [0, w, l - w, w], [l, 0, l, w], [0, l, w, l]
         ];
     },
 
     /**
-     * Berechnet den "Kollisionsverlust" für ein gegebenes Sofa-Objekt.
-     * HINWEIS: Dies ist keine binäre (Ja/Nein) Kollision. Stattdessen wird die
-     * kontinuierliche "Eindringtiefe" berechnet. Das ist entscheidend für das neuronale Netz,
-     * da es einen Gradienten benötigt, um lernen zu können. Eine kleine Verbesserung
-     * (weniger tief in der Wand) wird so belohnt.
+     * KORRIGIERTE VERSION: Berechnet den "Kollisionsverlust" für ein gegebenes Sofa-Objekt.
+     * HINWEIS: Diese neue Logik ist wesentlich robuster. Sie prüft nicht nur die inneren
+     * Grenzen, sondern auch, ob die Ecken die äußeren Enden des Korridors überschreiten.
+     * Dies verhindert, dass das Sofa "entkommt" und sorgt für einen stabilen Trainingsprozess.
      * @param {object} sofa - Das Sofa-Objekt mit einer getCorners()-Methode.
      * @returns {number} - Die Summe der quadratischen Eindringtiefen aller Ecken.
      */
@@ -52,38 +32,36 @@ const Corridor = {
         let totalPenetration = 0;
 
         for (const corner of corners) {
-            // Prüft, ob eine Ecke außerhalb der erlaubten Grenzen liegt.
-            // Die Logik hier ist eine vereinfachte, aber effektive Annäherung für einen L-förmigen Korridor.
             const x = corner.x;
             const y = corner.y;
             let penetration = 0;
 
-            // Ist die Ecke im vertikalen Arm?
-            const isInVerticalArm = (x > 0 && x < this.width && y > 0);
-            // Ist die Ecke im horizontalen Arm?
-            const isInHorizontalArm = (y > 0 && y < this.width && x > 0);
+            // Prüfe, ob die Ecke innerhalb des vertikalen Arms liegt
+            const inVerticalArm = (x >= 0 && x <= this.width && y >= 0 && y <= this.armLength);
+            // Prüfe, ob die Ecke innerhalb des horizontalen Arms liegt
+            const inHorizontalArm = (x >= 0 && x <= this.armLength && y >= 0 && y <= this.width);
 
-            // Wenn die Ecke in keinem der beiden Arme ist, befindet sie sich außerhalb des Korridors.
-            if (!isInVerticalArm && !isInHorizontalArm) {
-                // Berechne die "Verletzung" der Grenzen.
-                // Eindringtiefe in den vertikalen Arm (links/rechts)
-                const px_vert = Math.max(0, -x, x - this.width); 
-                // Eindringtiefe in den horizontalen Arm (oben/unten)
-                const px_horz = Math.max(0, -y, y - this.width);
+            // Wenn die Ecke in keinem der beiden erlaubten Bereiche ist, berechne die Eindringtiefe.
+            if (!inVerticalArm && !inHorizontalArm) {
+                // KORREKTUR: Berechne die Distanz zum nächstgelegenen erlaubten Punkt im Korridor.
+                // Dies ist eine präzisere Methode zur Bestimmung der "Verletzung".
+                let closestX = Math.max(0, Math.min(x, this.armLength));
+                let closestY = Math.max(0, Math.min(y, this.armLength));
 
-                // Wenn die Ecke im "verbotenen" Quadranten (unten rechts der Ecke) ist,
-                // ist die Eindringtiefe der Abstand zum Eckpunkt des Korridors.
-                if (x > this.width && y > this.width) {
-                    penetration = Math.sqrt(Math.pow(x - this.width, 2) + Math.pow(y - this.width, 2));
-                } else {
-                    // Ansonsten ist es die minimale Eindringtiefe in einen der Arme.
-                    penetration = Math.min(px_vert, px_horz);
+                if (closestX > this.width && closestY > this.width) {
+                    // Wenn der nächstgelegene Punkt im "verbotenen" Quadrant liegt,
+                    // nimm den Punkt auf der L-Grenze.
+                    if (Math.abs(x - this.width) < Math.abs(y - this.width)) {
+                        closestX = this.width;
+                    } else {
+                        closestY = this.width;
+                    }
                 }
+                
+                // Die Eindringtiefe ist der euklidische Abstand zum nächstgelegenen Punkt.
+                penetration = Math.sqrt(Math.pow(x - closestX, 2) + Math.pow(y - closestY, 2));
             }
-            
-            // Wir summieren die *quadratische* Eindringtiefe.
-            // Dies bestraft größere Eindringtiefen überproportional stark und sorgt
-            // für einen glatteren Gradienten nahe der Nulllinie.
+
             totalPenetration += penetration * penetration;
         }
         
@@ -91,5 +69,4 @@ const Corridor = {
     }
 };
 
-// Initialisiere die Korridorwände beim Laden des Skripts.
 Corridor.init();
