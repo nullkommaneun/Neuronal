@@ -17,15 +17,36 @@
       </div>`;
     document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(el));
     EM.overlay = el;
-    el.querySelector('#copyBtn').onclick = ()=>{
-      const ta = el.querySelector('#code'); ta.focus(); ta.select(); document.execCommand('copy');
+    el.querySelector('#copyBtn').onclick = async ()=>{
+      const ta = el.querySelector('#code');
+      const txt = ta.value;
+      try{
+        if(navigator.clipboard && navigator.clipboard.writeText){
+          await navigator.clipboard.writeText(txt);
+          toast('Code in Zwischenablage kopiert.');
+        }else{
+          ta.focus(); ta.select();
+          const ok = document.execCommand('copy');
+          toast(ok?'Code kopiert (Fallback).':'Konnte nicht kopieren. Markiert – bitte manuell.');
+        }
+      }catch(e){
+        console.warn('Clipboard-API fehlgeschlagen:', e);
+        ta.focus(); ta.select();
+        toast('Konnte nicht kopieren. Text ist markiert.');
+      }
     };
     el.querySelector('#hideBtn').onclick = ()=> el.style.display='none';
   }
   ensureOverlay();
+  function toast(msg){
+    let t = document.getElementById('toast');
+    if(!t){ t=document.createElement('div'); t.id='toast'; document.body.appendChild(t); }
+    t.textContent = msg; t.style.display='block'; setTimeout(()=>t.style.display='none', 2000);
+  }
   const badge = (label, ok, warn=false)=>`<span class="badge ${ok?'ok':(warn?'warn':'fail')}">${label}</span>`;
   function encode(obj){ try{ return "MSP-LOG:v1:"+btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }catch(_){ return "ENCODE_FAIL"; } }
   function updateOverlay(){
+    if(!EM.overlay) return;
     const b = EM.overlay.querySelector('#badges');
     const s = EM.overlay.querySelector('#status');
     const c = EM.overlay.querySelector('#code');
