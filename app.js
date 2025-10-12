@@ -1,11 +1,9 @@
 /**
  * @file app.js
  * @description Finale Version. Delegiert die Physik an die physics.js Engine.
- * Fungiert als Spielleiter und Kommentator.
  */
 window.addEventListener('DOMContentLoaded', setupPage);
 
-// Globale Variablen
 let canvas, ctx, sofa, startButton, pauseButton, logContainer;
 let isRunning = false, stableFrames = 0;
 const SCALE = 100;
@@ -30,7 +28,7 @@ function setupPage() {
 
 async function initializeAndStartSimulation() {
     startButton.disabled = true;
-    logMessage('Start-Befehl erhalten. Lade Simulationskomponenten...', 'info');
+    logMessage('Start-Befehl erhalten. Lade Komponenten...', 'info');
     try {
         updateBadge('badge-js', true);
         const modulesLoaded = typeof Corridor !== 'undefined' && typeof createSofa !== 'undefined' && typeof Path !== 'undefined' && typeof Physics !== 'undefined';
@@ -61,26 +59,19 @@ async function initializeAndStartSimulation() {
 
     } catch (error) {
         logMessage(`INITIALISIERUNGSFEHLER: ${error.message}`, 'error');
-        startButton.disabled = false; // Erlaube einen neuen Versuch
+        startButton.disabled = false;
     }
 }
 
 function simulationLoop() {
     if (!isRunning) return;
-    
     try {
-        // 1. Die KI verbessert ihren gesamten Plan basierend auf dem letzten Ergebnis.
         Path.trainStep(sofa);
-        
-        // 2. Die KI erstellt einen neuen, vollständigen Plan für diesen Frame.
         const waypoints = Path.getWaypoints();
-        
-        // 3. Die Physik-Engine führt den nächsten Schritt des Plans aus (falls legal).
         Physics.simulateStep(sofa, waypoints);
 
-        // 4. Der "Lehrer" bewertet den *geplanten* Pfad der KI, nicht die aktuelle physische Position.
         let planLoss = 0;
-        for(const wp of waypoints) {
+        for (const wp of waypoints) {
             const tempSofa = createSofa(sofa.width, sofa.height);
             tempSofa.setPosition(wp.x, wp.y, wp.rotation);
             planLoss += Corridor.calculateCollisionLoss(tempSofa);
@@ -101,7 +92,7 @@ function simulationLoop() {
 
         if (stableFrames > 100) {
             sofa.grow();
-            Physics.init(sofa); // Physik-Engine mit dem neuen, größeren Sofa neu starten
+            Physics.init(sofa);
             Path.init(0.01);
             stableFrames = 0;
             logMessage(`MISSION ERFÜLLT! Sofa wächst auf ${sofa.width.toFixed(2)}m.`, 'info');
@@ -123,7 +114,6 @@ function draw() {
     if (!sofa) return;
     ctx.save();
     ctx.translate(20, 20);
-
     const w = Corridor.width * SCALE;
     const l = Corridor.armLength * SCALE;
     ctx.strokeStyle = '#888'; ctx.lineWidth = 2; ctx.beginPath();
@@ -132,10 +122,7 @@ function draw() {
     ctx.fillStyle = 'lightgreen'; ctx.fillText('A', 0.5 * w - 5, l - 5);
     ctx.fillStyle = 'red'; ctx.fillText('B', l - 15, 0.5 * w + 5);
     
-    // WICHTIG: Wir zeichnen immer den physikalisch korrekten Zustand aus der Physics Engine.
     const currentState = Physics.sofaState;
-    
-    // Temporäres Sofa-Objekt nur für das Zeichnen erstellen, um den Zustand nicht zu verändern.
     const drawSofa = createSofa(sofa.width, sofa.height);
     drawSofa.setPosition(currentState.x, currentState.y, currentState.rotation);
     const currentLoss = Corridor.calculateCollisionLoss(drawSofa);
@@ -145,7 +132,7 @@ function draw() {
     ctx.moveTo(corners[0].x * SCALE, corners[0].y * SCALE);
     for (let i = 1; i < corners.length; i++) ctx.lineTo(corners[i].x * SCALE, corners[i].y * SCALE);
     ctx.closePath();
-    ctx.fillStyle = currentLoss > 0.001 ? '#e74c3c' : '#3498db'; // Farbe basiert auf der echten Kollision
+    ctx.fillStyle = currentLoss > 0.001 ? '#e74c3c' : '#3498db';
     ctx.fill();
     ctx.strokeStyle = '#ecf0f1';
     ctx.lineWidth = 1.5;
