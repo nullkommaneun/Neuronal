@@ -1,15 +1,38 @@
-// corridor.js
+// corridor.js (Version 2 - Physical Collision)
 const Corridor = {
     width: 1.0,
-    calculateCollision: (points, shapeOutput) => {
-        const x = points.slice([0, 0], [-1, 1]);
-        const y = points.slice([0, 1], [-1, 1]);
-        const halfWidth = Corridor.width / 2;
-        const wall1 = tf.relu(y.sub(halfWidth).mul(tf.cast(x.less(0), 'float32')));
-        const wall2 = tf.relu(y.neg().sub(halfWidth).mul(tf.cast(x.less(0), 'float32')));
-        const wall3 = tf.relu(x.sub(halfWidth).mul(tf.cast(y.less(0), 'float32')));
-        const wall4 = tf.relu(x.neg().sub(halfWidth).mul(tf.cast(y.less(0), 'float32')));
-        const totalCollision = wall1.add(wall2).add(wall3).add(wall4);
-        return tf.sum(totalCollision.mul(shapeOutput));
+    armLength: 3.0,
+
+    /**
+     * Prüft, ob ein einzelner Punkt innerhalb der Korridorgrenzen liegt.
+     * @param {number} x - Die x-Koordinate des Punktes.
+     * @param {number} y - Die y-Koordinate des Punktes.
+     * @returns {boolean} - True, wenn der Punkt im Korridor ist, sonst false.
+     */
+    isInside: function(x, y) {
+        // Außerhalb der Gesamtgrenzen?
+        if (x < 0 || y < 0 || x > this.armLength || y > this.armLength) {
+            return false;
+        }
+        // Innerhalb der "verbotenen" Wand-Ecke?
+        if (x > this.width && y > this.width) {
+            return false;
+        }
+        return true;
+    },
+
+    /**
+     * Prüft, ob ein Sofa-Objekt mit den Wänden kollidiert.
+     * @param {object} sofa - Das Sofa-Objekt mit seinen Eckpunkten.
+     * @returns {boolean} - True, wenn eine Kollision vorliegt, sonst false.
+     */
+    checkCollision: function(sofa) {
+        const corners = sofa.getCorners();
+        for (const corner of corners) {
+            if (!this.isInside(corner.x, corner.y)) {
+                return true; // Mindestens eine Ecke ist außerhalb -> Kollision!
+            }
+        }
+        return false;
     }
 };
