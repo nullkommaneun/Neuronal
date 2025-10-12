@@ -18,39 +18,42 @@ const Path = {
     },
 
     /**
-     * KORRIGIERTE VERSION: Generiert die Sequenz der Wegpunkte für das Sofa.
-     * HINWEIS: Die ursprüngliche Logik war für einen "rechts, dann runter"-Korridor.
-     * Wir haben die Logik korrigiert, um dem "runter, dann rechts"-Layout zu entsprechen.
+     * KORRIGIERTE VERSION: Definiert den Pfad von UNTEN (A) nach RECHTS (B).
      * @returns {Array<object>} Eine Liste von Wegpunkten, jeder mit {x, y, rotation}.
      */
     getWaypoints: function() {
         const adjustments = this.pathAdjustments.arraySync();
         const waypoints = [];
         
-        // Konstanten für einen klareren Pfad
+        // Konstanten für einen klaren Pfad durch die Mitte des Korridors.
         const corridorWidth = Corridor.width;
-        const centerX = corridorWidth / 2; // X-Position im vertikalen Arm
-        const centerY = corridorWidth / 2; // Y-Position im horizontalen Arm
+        const armLength = Corridor.armLength;
+        const centerX = corridorWidth / 2;
+        const centerY = corridorWidth / 2;
         
         for (let i = 0; i < this.numWaypoints; i++) {
             const t = i / (this.numWaypoints - 1); // Fortschritt von 0.0 bis 1.0
 
             let baseX, baseY, baseRotation;
 
-            // Der Basispfad ist jetzt ein einfacher L-förmiger Weg durch die Mitte des Korridors.
+            // VERMERK: Die neue Pfadlogik "HOCH, dann RECHTS"
             if (t < 0.5) {
-                // Erste Hälfte: Bewegung nach UNTEN
+                // Erste Hälfte: Bewegung nach OBEN
                 const t_segment = t * 2; // Fortschritt in diesem Segment (0-1)
                 baseX = centerX;
-                // Interpoliere von der Start-Y-Position zur Ecke
-                baseY = centerX + t_segment * (Corridor.armLength - corridorWidth); 
+                // Interpoliere von der Start-Y-Position (unten) zur Ecke (oben-links)
+                const startY = armLength - centerY;
+                const cornerY = centerY;
+                baseY = startY + t_segment * (cornerY - startY); 
                 baseRotation = 0; // Vertikal ausgerichtet
             } else {
                 // Zweite Hälfte: Bewegung nach RECHTS
                 const t_segment = (t - 0.5) * 2; // Fortschritt in diesem Segment (0-1)
-                // Interpoliere von der Ecke zur End-X-Position
-                baseX = centerX + t_segment * (Corridor.armLength - corridorWidth);
-                baseY = Corridor.armLength - centerX;
+                baseY = centerY;
+                // Interpoliere von der Ecke zur End-X-Position (rechts)
+                const cornerX = centerX;
+                const endX = armLength - centerX;
+                baseX = cornerX + t_segment * (endX - cornerX);
                 baseRotation = Math.PI / 2; // Horizontal ausgerichtet
             }
 
