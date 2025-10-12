@@ -9,31 +9,26 @@
       <h2>Status & Diagnose</h2>
       <div class="row" id="badges"></div>
       <pre id="status"></pre>
-      <label>Maschinencode (kopierbar):</label>
+      <label>Maschinencode (kopierbar / markierbar):</label>
       <textarea id="code" readonly></textarea>
       <div class="row actions">
         <button id="copyBtn">Code kopieren</button>
-        <button id="selectBtn">Nur markieren</button>
+        <button id="selectBtn">Alles markieren</button>
         <button id="hideBtn">Schließen</button>
       </div>`;
     document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(el));
     EM.overlay = el;
+    const getText = ()=> el.querySelector('#code').value;
     el.querySelector('#copyBtn').onclick = async ()=>{
-      const ta = el.querySelector('#code'); const txt = ta.value;
       try{
-        if(navigator.clipboard && navigator.clipboard.writeText){
-          await navigator.clipboard.writeText(txt);
-          toast('Code in Zwischenablage kopiert.');
-        }else{
-          ta.focus(); ta.select();
-          const ok = document.execCommand('copy');
-          toast(ok?'Code kopiert (Fallback).':'Konnte nicht kopieren. Markiert – bitte manuell.');
-        }
+        await navigator.clipboard.writeText(getText());
+        toast('Code in Zwischenablage kopiert.');
       }catch(e){
-        console.warn('Clipboard-API fehlgeschlagen:', e); ta.focus(); ta.select(); toast('Konnte nicht kopieren. Text ist markiert.');
+        console.warn('Clipboard-API fehlgeschlagen:', e);
+        const ta = el.querySelector('#code'); ta.focus(); ta.select(); toast('Text markiert – bitte „Kopieren“ tippen.');
       }
     };
-    el.querySelector('#selectBtn').onclick = ()=>{ const ta=el.querySelector('#code'); ta.focus(); ta.select(); toast('Text markiert. Tippe „Kopieren“.'); };
+    el.querySelector('#selectBtn').onclick = ()=>{ const ta=el.querySelector('#code'); ta.focus(); ta.select(); toast('Text markiert.'); };
     el.querySelector('#hideBtn').onclick = ()=> el.style.display='none';
   }
   ensureOverlay();
@@ -64,9 +59,7 @@
     c.value = encode({ts:Date.now(), ua:navigator.userAgent, report:R, log:EM.log});
   }
   EM.report.env = {
-    ua: navigator.userAgent,
-    platform: navigator.platform,
-    lang: navigator.language,
+    ua: navigator.userAgent, platform: navigator.platform, lang: navigator.language,
     screen: { w: screen.width, h: screen.height, dpr: devicePixelRatio }
   };
   window.addEventListener('error', e=>{ EM.log.push({type:'error', msg:String(e.message||e.error), stack:(e.error&&e.error.stack)||null}); EM.fatal = true; updateOverlay(); });

@@ -27,6 +27,7 @@ function makeGrid(N){
 }
 
 async function bootstrap(){
+  // Warte auf ErrorShield-Ready und starte automatisch
   const wait = (cond)=> new Promise((resolve,reject)=>{
     let n=0; const id=setInterval(()=>{
       if(cond()){ clearInterval(id); resolve(); }
@@ -38,12 +39,11 @@ async function bootstrap(){
   path = initPath(8);
   opt = tf.train.adam(1e-3);
   GRID = makeGrid(res);
-  const ctr = document.getElementById('controls'); ctr.classList.remove('disabled');
-  document.getElementById('reset').disabled=false;
-  document.getElementById('opt').disabled=false;
+
+  // Buttons funktionieren weiterhin, aber wir starten direkt:
   document.getElementById('reset').onclick = ()=>location.reload();
-  document.getElementById('opt').onclick = ()=>loop();
-  loop();
+  document.getElementById('opt').onclick = ()=>{ manualLoop=true; }; // erlaubt manuelles Nachtriggern
+  loop(); // AUTOSTART
 }
 
 async function stepOnce(){
@@ -80,13 +80,16 @@ async function stepOnce(){
   [fGrid,hall,area,smooth].forEach(t=>t.dispose());
 }
 
+let manualLoop=false;
 async function loop(){
   try{
-    for(let i=0;i<15;i++){ await stepOnce(); document.getElementById('iter').textContent = String((+document.getElementById('iter').textContent)||0 + 1); }
-    requestAnimationFrame(loop);
+    for(let i=0;i<12;i++){ await stepOnce(); document.getElementById('iter').textContent = String((+document.getElementById('iter').textContent)||0 + 1); }
   }catch(e){
     EM.log.push({type:'loop', msg:String(e), stack:e.stack||null});
     EM.fatal=true;
+  }finally{
+    // Automatisch weitermachen (60 FPS ist zu viel; wir drosseln)
+    if(!EM.fatal){ setTimeout(loop, 60); }
   }
 }
 

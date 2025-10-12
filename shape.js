@@ -1,5 +1,5 @@
 const tf = window.tf;
-const R_PRIOR = 1.5; // Größerer Start-Radius (m) → sichtbar
+const R_PRIOR = 1.5;
 export function createShapeModel(seed=42){
   try{ tf.util.setSeed(seed); }catch(_){}
   const model = tf.sequential();

@@ -40,18 +40,14 @@ export function drawFrame(ctx, {W,H,cw,ch, meters, fGridData, hallMaskData}){
   ctx.strokeRect(midX - bandWPx/2, midY, bandWPx, ch/2);
   ctx.restore();
 
-  // Filled interior: draw an offscreen image W×H with alpha for inside pixels
+  // Filled interior
   const img = ctx.createImageData(W, H);
   for(let i=0;i<fGridData.length;i++){
     const inside = fGridData[i] >= 0;
     if(!inside) continue;
     const o = i*4;
-    img.data[o+0] = 16;   // R
-    img.data[o+1] = 185;  // G (grünlich)
-    img.data[o+2] = 129;  // B
-    img.data[o+3] = 50;   // Alpha ~ 0.2
+    img.data[o+0] = 16; img.data[o+1] = 185; img.data[o+2] = 129; img.data[o+3] = 60;
   }
-  // Draw scaled
   const off = document.createElement('canvas'); off.width=W; off.height=H;
   const octx = off.getContext('2d'); octx.putImageData(img,0,0);
   ctx.imageSmoothingEnabled = true;
@@ -60,9 +56,7 @@ export function drawFrame(ctx, {W,H,cw,ch, meters, fGridData, hallMaskData}){
   // Contour
   const lines = marchingSquares(fGridData, W, H, 0);
   ctx.save();
-  ctx.strokeStyle = '#22d3ee'; // kräftiger
-  ctx.lineWidth = 4.0;
-  ctx.beginPath();
+  ctx.strokeStyle = '#22d3ee'; ctx.lineWidth = 4.0; ctx.beginPath();
   for(const [[x0,y0],[x1,y1]] of lines){
     ctx.moveTo(x0*scaleX, y0*scaleY);
     ctx.lineTo(x1*scaleX, y1*scaleY);
