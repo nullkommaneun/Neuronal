@@ -1,7 +1,7 @@
 /**
  * @file path.js
- * @description Finale, stabile KI. Gradient Clipping verhindert "panische"
- * Sprünge und sorgt für einen stabilen, schrittweisen Lernprozess.
+ * @description Finale, stabile KI. Beginnt mit kleinen, vorsichtigen Schritten,
+ * um einen stabilen Lernprozess von Anfang an zu garantieren.
  */
 const Path = {
     optimizer: null,
@@ -10,11 +10,16 @@ const Path = {
 
     init: function(learningRate) {
         if (this.pathDeltas) tf.dispose(this.pathDeltas);
+        
         const initialDeltas = [];
         for (let i = 0; i < this.numWaypoints - 1; i++) {
-            initialDeltas.push(0, -0.2, 0);
+            // HIER IST DIE ENTSCHEIDENDE ÄNDERUNG:
+            // Statt großer 20cm-Sprünge (-0.2) starten wir mit winzigen 2cm-Schritten (-0.02).
+            // Das verhindert die anfängliche "Explosion".
+            initialDeltas.push(0, -0.02, 0); // Starte mit kleinen, vorsichtigen Schritten nach oben
         }
         this.pathDeltas = tf.variable(tf.tensor(initialDeltas, [this.numWaypoints - 1, 3]));
+        
         this.optimizer = tf.train.adam(learningRate);
     },
 
@@ -40,8 +45,10 @@ const Path = {
     },
 
     trainStep: function(sofa) {
-        // Wir verwenden die explizite Gradienten-Berechnung, um Clipping anwenden zu können.
-        const lossFunction = () => {
+        // Wir kehren zur stabileren minimize-Methode zurück, da die Panik
+        // nun an der Quelle (in init) verhindert wird.
+        const variables = [this.pathDeltas];
+        this.optimizer.minimize(() => {
             let totalCollisionLoss = 0;
             const waypoints = this.getWaypoints();
             for (const wp of waypoints) {
@@ -62,16 +69,7 @@ const Path = {
             
             const dummyLoss = this.pathDeltas.sum().mul(0);
             return finalLoss.add(dummyLoss);
-        };
-
-        // Schritt 1: Berechne die Gradienten (die "panische" Reaktion der KI)
-        const grads = tf.grad(lossFunction)(this.pathDeltas);
-        
-        // DER "FAHRLEHRER" (GRADIENT CLIPPING)
-        // Wir begrenzen die Stärke der Reaktion auf einen vernünftigen Maximalwert.
-        const clippedGrads = tf.clipByValue(grads, -0.1, 0.1);
-
-        // Schritt 3: Wende die kontrollierte, "abgebremste" Reaktion an.
-        this.optimizer.applyGradients({[this.pathDeltas.name]: clippedGrads});
+            
+        }, /* returnCost */ false, variables);
     }
 };
