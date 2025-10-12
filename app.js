@@ -46,7 +46,7 @@ async function main() {
 
     canvas = document.getElementById('simulationCanvas');
     ctx = canvas.getContext('2d');
-    sofa = createSofa(1.0, 1.0);
+    sofa = createSofa(0.5, 0.5);
     startButton = document.getElementById('startButton');
     pauseButton = document.getElementById('pauseButton');
     updateBadge('badge-backend', true);
