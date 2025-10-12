@@ -1,38 +1,50 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Moving-Sofa · NN-Optimizer</title>
-<link rel="stylesheet" href="style.css">
-<script defer src="errorManager.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js" defer></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Neural Sofa Explorer</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
 </head>
 <body>
-  <header>
-    <h1>Moving-Sofa (1 m Flur) – Neural Optimizer</h1>
-    <div id="controls">
-      <label>Raster: <input id="res" type="number" value="384" min="192" max="768"></label>
-      <label>Time steps: <input id="tsteps" type="number" value="48" min="16" max="128"></label>
-      <label>λ<sub>A</sub>: <input id="wA" type="number" value="1.0" step="0.1"></label>
-      <label>λ<sub>C</sub>: <input id="wC" type="number" value="8.0" step="0.1"></label>
-      <label>λ<sub>R</sub>: <input id="wR" type="number" value="0.05" step="0.01"></label>
-      <label>λ<sub>P</sub>: <input id="wP" type="number" value="0.1" step="0.01"></label>
-      <button id="reset">Reset</button>
-      <button id="opt">Optimieren</button>
+    <div id="diag-overlay">
+        <div id="diag-header">
+            <h3>Neural Sofa Explorer</h3>
+            <button id="minimize-diag">-</button>
+        </div>
+        <div id="diag-content">
+            <p>Initialisiere System...</p>
+            <div class="badge-container">
+                <span class="badge" id="badge-js">JS</span>
+                <span class="badge" id="badge-tfjs">TF.js</span>
+                <span class="badge" id="badge-backend">Backend</span>
+                <span class="badge" id="badge-webgl">WebGL2</span>
+                <span class="badge" id="badge-wasm">WASM</span>
+            </div>
+            <div id="error-log-container" style="display: none;">
+                <h4>Fehlerprotokoll:</h4>
+                <pre id="error-log"></pre>
+            </div>
+            <button id="export-log-btn">Export Log</button>
+        </div>
     </div>
-  </header>
+    <button id="show-diag-btn" class="minimized" title="Diagnose anzeigen">+</button>
 
-  <canvas id="view" width="900" height="600" aria-label="Visualisierung"></canvas>
+    <div id="app-container">
+        <canvas id="simulation-canvas"></canvas>
+        <div id="controls">
+            <h1>Moving Sofa Problem</h1>
+            <div class="metrics">
+                <div>Fläche: <span id="metric-area">0.000</span></div>
+                <div>Loss: <span id="metric-loss">0.000</span></div>
+                <div>Iteration: <span id="metric-iteration">0</span></div>
+            </div>
+            <button id="start-stop-btn">Start</button>
+            <button id="export-svg-btn">Export SVG</button>
+        </div>
+    </div>
 
-  <section id="stats">
-    <div>Fläche: <span id="area">–</span> m²</div>
-    <div>Loss: <span id="loss">–</span></div>
-    <div>Schritt: <span id="iter">0</span></div>
-  </section>
-
-  <div id="overlay-toggle" title="Diagnose anzeigen (M)">Diagnose</div>
-
-  <script type="module" src="main.js" defer></script>
+    <script src="app.js"></script>
 </body>
 </html>
