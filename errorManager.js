@@ -1,6 +1,17 @@
 (function(){
-  const EM = { ready:false, fatal:false, report:{}, log:[], overlay:null };
+  const EM = { ready:false, fatal:false, report:{}, log:[], overlay:null, toggle:null };
   window.errorManager = EM;
+
+  function showToggle(show){
+    if(!EM.toggle){
+      const t = document.getElementById('overlay-toggle');
+      EM.toggle = t;
+      t.onclick = ()=>{ const ov=document.getElementById('error-overlay'); ov.classList.remove('min'); t.style.display='none'; };
+      document.addEventListener('keydown', (e)=>{ if((e.key||'').toLowerCase()==='m'){ t.click(); }});
+    }
+    EM.toggle.style.display = show ? 'block' : 'none';
+  }
+
   function ensureOverlay(){
     if(EM.overlay) return;
     const el = document.createElement('div');
@@ -14,24 +25,23 @@
       <div class="row actions">
         <button id="copyBtn">Code kopieren</button>
         <button id="selectBtn">Alles markieren</button>
+        <button id="minBtn">Minimieren</button>
         <button id="hideBtn">Schließen</button>
       </div>`;
     document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(el));
     EM.overlay = el;
     const getText = ()=> el.querySelector('#code').value;
     el.querySelector('#copyBtn').onclick = async ()=>{
-      try{
-        await navigator.clipboard.writeText(getText());
-        toast('Code in Zwischenablage kopiert.');
-      }catch(e){
-        console.warn('Clipboard-API fehlgeschlagen:', e);
-        const ta = el.querySelector('#code'); ta.focus(); ta.select(); toast('Text markiert – bitte „Kopieren“ tippen.');
-      }
+      try{ await navigator.clipboard.writeText(getText()); toast('Code kopiert.'); }
+      catch(e){ const ta=el.querySelector('#code'); ta.focus(); ta.select(); toast('Text markiert – bitte kopieren.'); }
     };
     el.querySelector('#selectBtn').onclick = ()=>{ const ta=el.querySelector('#code'); ta.focus(); ta.select(); toast('Text markiert.'); };
-    el.querySelector('#hideBtn').onclick = ()=> el.style.display='none';
+    el.querySelector('#minBtn').onclick = ()=>{ el.classList.add('min'); showToggle(true); };
+    el.querySelector('#hideBtn').onclick = ()=>{ el.style.display='none'; showToggle(true); };
+    showToggle(false);
   }
   ensureOverlay();
+
   function toast(msg){
     let t = document.getElementById('toast');
     if(!t){ t=document.createElement('div'); t.id='toast'; document.body.appendChild(t); }
@@ -58,37 +68,53 @@
     s.textContent = JSON.stringify(R, null, 2);
     c.value = encode({ts:Date.now(), ua:navigator.userAgent, report:R, log:EM.log});
   }
+
   EM.report.env = {
     ua: navigator.userAgent, platform: navigator.platform, lang: navigator.language,
     screen: { w: screen.width, h: screen.height, dpr: devicePixelRatio }
   };
+
   window.addEventListener('error', e=>{ EM.log.push({type:'error', msg:String(e.message||e.error), stack:(e.error&&e.error.stack)||null}); EM.fatal = true; updateOverlay(); });
   window.addEventListener('unhandledrejection', e=>{ EM.log.push({type:'unhandledrejection', msg:String(e.reason)}); EM.fatal = true; updateOverlay(); });
+
   (function(){ let last = performance.now(); let ok=true;
     function tick(t){ const dt=t-last; last=t; if(dt>200){ ok=false; }
       EM.report.raf_ok = ok; updateOverlay(); requestAnimationFrame(tick); }
     requestAnimationFrame(tick);
   })();
+
+  // Feature probes
   (function(){ let gl=null, gl2=null;
     try{ const c=document.createElement('canvas'); gl=c.getContext('webgl')||c.getContext('experimental-webgl'); gl2=c.getContext('webgl2'); }catch(_){}
-    EM.report.webgl = !!gl || "fallback"; EM.report.webgl2 = !!gl2 || "fallback"; EM.report.wasm = (typeof WebAssembly==='object')||"fallback";
+    EM.report.webgl = !!gl || "fallback";
+    EM.report.webgl2 = !!gl2 || "fallback";
+    EM.report.wasm = (typeof WebAssembly==='object')||"fallback";
   })();
+
+  // Decide backend order: prefer WASM when WebGL2 is unavailable
+  function backendOrder(){
+    const hasGL2 = EM.report.webgl2===true;
+    return hasGL2 ? ['webgl','wasm','cpu'] : ['wasm','webgl','cpu'];
+  }
+
   async function initTF(){
     try{
       if(!window.tf){ EM.report.tfLoaded=false; updateOverlay(); return; }
       EM.report.tfLoaded=true;
-      const order=['webgl','wasm','cpu']; let chosen=null;
-      for(const b of order){
-        try{ await tf.setBackend(b); await tf.ready();
+      let chosen=null;
+      for(const b of backendOrder()){
+        try{
+          await tf.setBackend(b); await tf.ready();
           const a=tf.tensor([1,2,3]); const r=a.square().sum(); await r.data(); a.dispose(); r.dispose();
           chosen=b; break;
-        }catch(_){}
+        }catch(e){ EM.log.push({type:'backendFail', backend:b, msg:String(e)}); }
       }
       EM.report.backend = chosen||null;
       if(!chosen) EM.fatal=true;
     }catch(e){ EM.log.push({type:'tfinit', msg:String(e)}); EM.fatal=true; }
     finally{ EM.ready=true; updateOverlay(); }
   }
+
   function when(cond, cb, tries=400){
     const t=setInterval(()=>{ if(cond()){ clearInterval(t); cb(); } else if(--tries<=0){ clearInterval(t); EM.fatal=true; EM.log.push({type:'timeout', msg:'init timeout'}); updateOverlay(); } },25);
   }

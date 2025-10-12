@@ -27,7 +27,6 @@ function makeGrid(N){
 }
 
 async function bootstrap(){
-  // Warte auf ErrorShield-Ready und starte automatisch
   const wait = (cond)=> new Promise((resolve,reject)=>{
     let n=0; const id=setInterval(()=>{
       if(cond()){ clearInterval(id); resolve(); }
@@ -40,10 +39,9 @@ async function bootstrap(){
   opt = tf.train.adam(1e-3);
   GRID = makeGrid(res);
 
-  // Buttons funktionieren weiterhin, aber wir starten direkt:
   document.getElementById('reset').onclick = ()=>location.reload();
-  document.getElementById('opt').onclick = ()=>{ manualLoop=true; }; // erlaubt manuelles Nachtriggern
-  loop(); // AUTOSTART
+  document.getElementById('opt').onclick = ()=>{ manualLoop=true; };
+  loop(); // autostart
 }
 
 async function stepOnce(){
@@ -88,7 +86,6 @@ async function loop(){
     EM.log.push({type:'loop', msg:String(e), stack:e.stack||null});
     EM.fatal=true;
   }finally{
-    // Automatisch weitermachen (60 FPS ist zu viel; wir drosseln)
     if(!EM.fatal){ setTimeout(loop, 60); }
   }
 }
