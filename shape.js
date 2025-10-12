@@ -1,5 +1,5 @@
 const tf = window.tf;
-const R_PRIOR = 0.6; // Startkreis-Radius (m)
+const R_PRIOR = 1.5; // Größerer Start-Radius (m) → sichtbar
 export function createShapeModel(seed=42){
   try{ tf.util.setSeed(seed); }catch(_){}
   const model = tf.sequential();
@@ -8,10 +8,9 @@ export function createShapeModel(seed=42){
   model.add(tf.layers.dense({units:1}));
   return model;
 }
-// f = mlp(x,y) + (r0 - sqrt(x^2+y^2))  → anfänglich Kreis
 export function predictF(model, xy){
   return tf.tidy(()=>{
-    const mlp = model.predict(xy); // [N,1]
+    const mlp = model.predict(xy);
     const x = xy.slice([0,0],[xy.shape[0],1]);
     const y = xy.slice([0,1],[xy.shape[0],1]);
     const r = x.square().add(y.square()).sqrt();

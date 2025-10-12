@@ -30,24 +30,39 @@ export function drawFrame(ctx, {W,H,cw,ch, meters, fGridData, hallMaskData}){
 
   const scaleX = cw/W, scaleY = ch/H;
 
-  // Corridor outline (exact mapping): 1m Breite → H entspricht ~ (2/3)*W für Sichtfeld meters x (2/3*meters)
-  // Wir zeichnen L-Form proportional zum sichtbaren Metermaß: je 1m Band.
+  // Corridor outline (1 m L-Form)
   ctx.save();
   ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 2;
-  // Horizontaler Arm: Mitte vertikal
-  const bandH = (1.0 / (meters/ (H))) * scaleY; // pixelhöhe für 1m (näherungsweise)
-  const midY = ch/2;
-  ctx.strokeRect(0, midY - bandH/2, cw/2, bandH);
-  // Vertikaler Arm: Mitte horizontal
-  const bandW = (1.0 / (meters/ (W))) * scaleX;
-  const midX = cw/2;
-  ctx.strokeRect(midX - bandW/2, midY, bandW, ch/2);
+  const bandHPx = (1.0 / (meters/(H))) * scaleY;
+  const bandWPx = (1.0 / (meters/(W))) * scaleX;
+  const midY = ch/2, midX = cw/2;
+  ctx.strokeRect(0, midY - bandHPx/2, cw/2, bandHPx);
+  ctx.strokeRect(midX - bandWPx/2, midY, bandWPx, ch/2);
   ctx.restore();
+
+  // Filled interior: draw an offscreen image W×H with alpha for inside pixels
+  const img = ctx.createImageData(W, H);
+  for(let i=0;i<fGridData.length;i++){
+    const inside = fGridData[i] >= 0;
+    if(!inside) continue;
+    const o = i*4;
+    img.data[o+0] = 16;   // R
+    img.data[o+1] = 185;  // G (grünlich)
+    img.data[o+2] = 129;  // B
+    img.data[o+3] = 50;   // Alpha ~ 0.2
+  }
+  // Draw scaled
+  const off = document.createElement('canvas'); off.width=W; off.height=H;
+  const octx = off.getContext('2d'); octx.putImageData(img,0,0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.drawImage(off, 0, 0, cw, ch);
 
   // Contour
   const lines = marchingSquares(fGridData, W, H, 0);
   ctx.save();
-  ctx.strokeStyle = '#10b981'; ctx.lineWidth = 2.0; ctx.beginPath();
+  ctx.strokeStyle = '#22d3ee'; // kräftiger
+  ctx.lineWidth = 4.0;
+  ctx.beginPath();
   for(const [[x0,y0],[x1,y1]] of lines){
     ctx.moveTo(x0*scaleX, y0*scaleY);
     ctx.lineTo(x1*scaleX, y1*scaleY);
@@ -62,5 +77,8 @@ export function drawFrame(ctx, {W,H,cw,ch, meters, fGridData, hallMaskData}){
   }
   const ratio = insideCount>0 ? collisions/insideCount : 0;
   if(ratio>0){ ctx.save(); ctx.fillStyle = 'rgba(239,68,68,0.18)'; ctx.fillRect(0,0,cw,ch); ctx.restore(); }
-  ctx.save(); ctx.fillStyle = '#cbd5e1'; ctx.font = '12px ui-monospace, monospace'; ctx.fillText(`Collision ratio: ${(ratio*100).toFixed(1)}%`, 12, 18); ctx.restore();
+
+  // HUD
+  ctx.save(); ctx.fillStyle = '#cbd5e1'; ctx.font = '12px ui-monospace, monospace';
+  ctx.fillText(`Collision ratio: ${(ratio*100).toFixed(1)}%`, 12, 18); ctx.restore();
 }

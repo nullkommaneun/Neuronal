@@ -56,7 +56,7 @@ async function stepOnce(){
     const yi = poses.y.slice([i,0],[1,1]).reshape([1,1]);
     const pi = poses.phi.slice([i,0],[1,1]).reshape([1,1]);
     const body = transformPoints(gridXY, xi, yi, pi);
-    const fBody = predictF(model, body); // use prior+mlp
+    const fBody = predictF(model, body);
     tPoints.push({fBody});
   }
   const area = await areaFromModel(model, gridXY, tau, dA);
@@ -82,7 +82,7 @@ async function stepOnce(){
 
 async function loop(){
   try{
-    for(let i=0;i<20;i++){ await stepOnce(); document.getElementById('iter').textContent = String((+document.getElementById('iter').textContent)||0 + 1); }
+    for(let i=0;i<15;i++){ await stepOnce(); document.getElementById('iter').textContent = String((+document.getElementById('iter').textContent)||0 + 1); }
     requestAnimationFrame(loop);
   }catch(e){
     EM.log.push({type:'loop', msg:String(e), stack:e.stack||null});

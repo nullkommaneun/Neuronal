@@ -11,15 +11,15 @@
       <pre id="status"></pre>
       <label>Maschinencode (kopierbar):</label>
       <textarea id="code" readonly></textarea>
-      <div class="row">
+      <div class="row actions">
         <button id="copyBtn">Code kopieren</button>
+        <button id="selectBtn">Nur markieren</button>
         <button id="hideBtn">Schließen</button>
       </div>`;
     document.addEventListener('DOMContentLoaded',()=>document.body.appendChild(el));
     EM.overlay = el;
     el.querySelector('#copyBtn').onclick = async ()=>{
-      const ta = el.querySelector('#code');
-      const txt = ta.value;
+      const ta = el.querySelector('#code'); const txt = ta.value;
       try{
         if(navigator.clipboard && navigator.clipboard.writeText){
           await navigator.clipboard.writeText(txt);
@@ -30,11 +30,10 @@
           toast(ok?'Code kopiert (Fallback).':'Konnte nicht kopieren. Markiert – bitte manuell.');
         }
       }catch(e){
-        console.warn('Clipboard-API fehlgeschlagen:', e);
-        ta.focus(); ta.select();
-        toast('Konnte nicht kopieren. Text ist markiert.');
+        console.warn('Clipboard-API fehlgeschlagen:', e); ta.focus(); ta.select(); toast('Konnte nicht kopieren. Text ist markiert.');
       }
     };
+    el.querySelector('#selectBtn').onclick = ()=>{ const ta=el.querySelector('#code'); ta.focus(); ta.select(); toast('Text markiert. Tippe „Kopieren“.'); };
     el.querySelector('#hideBtn').onclick = ()=> el.style.display='none';
   }
   ensureOverlay();
