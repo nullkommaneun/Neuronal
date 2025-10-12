@@ -19,10 +19,12 @@ let model, path, opt, GRID;
 
 function makeGrid(N){
   const W = N, H = Math.round(N*2/3);
-  const xs = tf.linspace(-meters/2, meters/2, W);
-  const ys = tf.linspace(-meters/3, meters/3, H);
-  const X = xs.tile([H]);
-  const Y = ys.repeat(W);
+  const xs = tf.linspace(-meters/2, meters/2, W);   // [W]
+  const ys = tf.linspace(-meters/3, meters/3, H);   // [H]
+  // Meshgrid in 1D-Vektoren: X = xs wiederholt für jede Zeile; 
+  // Y = jeder y-Wert W-mal wiederholt
+  const X = tf.tile(xs, [H]);                       // [H*W]
+  const Y = tf.reshape(tf.tile(ys.expandDims(1), [1, W]), [H*W]); // [H*W]
   return {gridXY: tf.stack([X,Y],1), W, H, dA: (meters/W)*(meters/H)};
 }
 
