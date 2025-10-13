@@ -1,4 +1,4 @@
-// sofa.mjs (Finaler korrigierter Code)
+// sofa.mjs (Finaler, endgültig korrigierter Code)
 export class Sofa {
     constructor() {
         this.model = null;
@@ -76,8 +76,12 @@ export class Sofa {
         return tf.tidy(() => {
             const predictions = this.model.predict(this.grid);
             const isInside = predictions.greater(0).as1D();
-            // KORREKTUR: Die Funktion wird auf dem Tensor aufgerufen, nicht auf dem tf-Objekt.
-            return this.grid.booleanMask(isInside);
+            
+            // **DIE FINALE KORREKTUR**
+            // 1. Finde die Indizes, wo 'isInside' wahr ist.
+            const indices = tf.where(isInside);
+            // 2. Nutze diese Indizes, um die Punkte aus dem Originalgitter zu "sammeln".
+            return tf.gather(this.grid, indices.as1D());
         });
     }
 
