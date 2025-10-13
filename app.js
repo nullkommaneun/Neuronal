@@ -10,36 +10,34 @@ function logToScreen(message, type = 'log-info') {
     if (debugOutput) {
         const line = document.createElement('div');
         line.className = type;
-        // Konvertiere Objekte in lesbaren Text (JSON)
         if (typeof message === 'object') {
             message = JSON.stringify(message, null, 2);
         }
         line.textContent = `> ${message}`;
         debugOutput.appendChild(line);
-        // Automatisch nach unten scrollen
         debugOutput.scrollTop = debugOutput.scrollHeight;
     }
 }
 
-console.log = function() { // Geändert, um alle Argumente zu verarbeiten
+console.log = function() {
     originalConsoleLog.apply(console, arguments);
     logToScreen(Array.from(arguments).join(' '), 'log-info');
 };
 
-console.error = function() { // Geändert, um alle Argumente zu verarbeiten
+console.error = function() {
     originalConsoleError.apply(console, arguments);
     logToScreen(`ERROR: ${Array.from(arguments).join(' ')}`, 'log-error');
 };
 
-// Fängt alle nicht abgefangenen Fehler global ab. Das ist der wichtigste Teil!
 window.onerror = function(message, source, lineno, colno, error) {
     console.error(`Uncaught Error: "${message}" in ${source} at line ${lineno}`);
-    return true; // Verhindert, dass der Browser-Standard-Fehlerdialog erscheint
+    return true;
 };
 // =======================================================
 // ====== ON-SCREEN DEBUG KONSOLE - ENDE ======
 // =======================================================
 
+// KORREKTUR: ./ hinzugefügt, um die Pfade explizit zu machen
 import { Corridor } from './corridor.js';
 import { Sofa } from './sofa.js';
 
@@ -55,10 +53,10 @@ const collisionLossDisplay = document.getElementById('stats-collision-loss');
 const areaRewardDisplay = document.getElementById('stats-area-reward');
 
 // Curriculum Learning & Animation
-let trainingPhase = 1; // 1 = Finde Lösung, 2 = Maximiere Fläche
+let trainingPhase = 1;
 const collisionLossHistory = [];
-const STABILITY_PERIOD = 100; // Anzahl der Frames für stabile Periode
-let animationT = 0; // Animationsfortschritt von 0 bis 1
+const STABILITY_PERIOD = 100;
+let animationT = 0;
 
 // --- Diagnose-Funktion ---
 function updateDiagStatus(id, success) {
@@ -70,20 +68,17 @@ function updateDiagStatus(id, success) {
 
 // --- Haupt-Schleife für Animation und Training ---
 async function gameLoop() {
-    // 1. Training (Curriculum Learning)
     let lambdaCollision, lambdaArea;
     if (trainingPhase === 1) {
-        lambdaCollision = 10.0; // Hohe Strafe für Kollisionen
-        lambdaArea = 1.0;       // Geringe Belohnung für Fläche
-    } else { // Phase 2
-        lambdaCollision = 2.0;  // Moderate Strafe, um Form beizubehalten
-        lambdaArea = 5.0;       // Aggressive Belohnung für Wachstum
+        lambdaCollision = 10.0;
+        lambdaArea = 1.0;
+    } else {
+        lambdaCollision = 2.0;
+        lambdaArea = 5.0;
     }
 
-    // Führe einen Trainingsschritt aus und erhalte die Verluste
     const losses = sofa.trainStep(corridor, lambdaCollision, lambdaArea);
     
-    // Statistiken aktualisieren und Phasenwechsel prüfen
     collisionLossDisplay.innerText = `Kollisionsverlust: ${losses.collisionLoss.toFixed(4)}`;
     areaRewardDisplay.innerText = `Flächen-Belohnung: ${losses.areaReward.toFixed(4)}`;
     
@@ -92,7 +87,6 @@ async function gameLoop() {
         if (collisionLossHistory.length > STABILITY_PERIOD) {
             collisionLossHistory.shift();
             const avgLoss = collisionLossHistory.reduce((a, b) => a + b, 0) / STABILITY_PERIOD;
-            // Wechsle, wenn der durchschnittliche Verlust über die Periode sehr klein ist
             if (avgLoss < 0.01) {
                 trainingPhase = 2;
                 phaseDisplay.innerText = "Phase 2: Fläche maximieren";
@@ -101,13 +95,9 @@ async function gameLoop() {
         }
     }
 
-    // 2. Visualisierung
     await draw();
-    
-    // Nächsten Frame anfordern
     requestAnimationFrame(gameLoop);
 }
-
 
 /**
  * Zeichnet die gesamte Szene.
@@ -117,15 +107,12 @@ async function draw() {
     corridor.draw(ctx);
 
     if (sofa && sofa.model) {
-        // Animationsschleife für die Position
         animationT = (animationT + 0.005) % 1.0;
         const currentPos = sofa.getPointOnPath(corridor.path, animationT);
         
-        // Formdaten vom Sofa-Modell holen
         const shapeValues = await sofa.getShapeForDrawing();
         const res = sofa.gridResolution;
 
-        // Kollisionsstatus an aktueller Position prüfen für die Farbe
         let maxDepth = 0;
         const shapePoints = sofa.getShapePoints();
         if (shapePoints.shape[0] > 0) {
@@ -136,13 +123,11 @@ async function draw() {
         }
         shapePoints.dispose();
         
-        // Farbe basierend auf Eindringtiefe setzen
-        let sofaColor = 'rgba(46, 204, 113, 0.7)'; // Grün (frei)
-        if (maxDepth > 0.1) sofaColor = 'rgba(231, 76, 60, 0.7)'; // Rot (starke Kollision)
-        else if (maxDepth > 0) sofaColor = 'rgba(52, 152, 219, 0.7)'; // Blau (Berührung)
+        let sofaColor = 'rgba(46, 204, 113, 0.7)';
+        if (maxDepth > 0.1) sofaColor = 'rgba(231, 76, 60, 0.7)';
+        else if (maxDepth > 0) sofaColor = 'rgba(52, 152, 219, 0.7)';
         ctx.fillStyle = sofaColor;
 
-        // Sofa-Form an aktueller Position zeichnen
         ctx.save();
         ctx.translate(currentPos.x, currentPos.y);
         ctx.rotate(currentPos.angle);
@@ -195,11 +180,9 @@ async function main() {
         gameLoop();
     } catch (error) {
         console.error(error.message);
-        // Fehler im UI anzeigen, z.B. das verantwortliche Badge rot färben
         if (error.message.includes("TensorFlow")) updateDiagStatus('diag-tf', false);
         else if (error.message.includes("Modell")) updateDiagStatus('diag-ai', false);
     }
 }
 
 main();
-
