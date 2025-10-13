@@ -1,4 +1,4 @@
-// sofa.mjs (Finaler, endgültig korrigierter Code)
+// sofa.mjs (Finaler, robuster Code)
 export class Sofa {
     constructor() {
         this.model = null;
@@ -54,12 +54,12 @@ export class Sofa {
             const { grads } = tf.variableGrads(lossFunction);
             this.optimizer.applyGradients(grads);
 
-            const shapePoints = this.getShapePoints();
+            const sofaPoints = this.getShapePoints();
             let finalCollisionLoss = 0;
-            if (shapePoints.shape[0] > 0) {
+            if (sofaPoints.shape[0] > 0) {
                 for (const t of [0, 0.25, 0.5, 0.75, 1.0]) {
                     const pos = this.getPointOnPath(corridor.path, t);
-                    const transformed = this.transformPoints(shapePoints, pos.x, pos.y, pos.angle);
+                    const transformed = this.transformPoints(sofaPoints, pos.x, pos.y, pos.angle);
                     finalCollisionLoss += transformed.arraySync().map(p => corridor.getPenetrationDepth(p[0], p[1])).reduce((s, d) => s + d, 0);
                 }
             }
@@ -75,13 +75,27 @@ export class Sofa {
     getShapePoints() {
         return tf.tidy(() => {
             const predictions = this.model.predict(this.grid);
-            const isInside = predictions.greater(0).as1D();
-            
-            // **DIE FINALE KORREKTUR**
-            // 1. Finde die Indizes, wo 'isInside' wahr ist.
-            const indices = tf.where(isInside);
-            // 2. Nutze diese Indizes, um die Punkte aus dem Originalgitter zu "sammeln".
-            return tf.gather(this.grid, indices.as1D());
+            const isInside = predictions.greater(0);
+
+            // **DIE ROBUSTE KORREKTUR**
+            // Wir holen die Daten als simple JavaScript-Arrays, um API-Fehler zu umgehen.
+            const gridData = this.grid.arraySync();
+            const isInsideData = isInside.dataSync();
+
+            const points = [];
+            for (let i = 0; i < isInsideData.length; i++) {
+                if (isInsideData[i]) {
+                    points.push(gridData[i]);
+                }
+            }
+
+            // Wenn keine Punkte drin sind, geben wir einen leeren Tensor zurück.
+            if (points.length === 0) {
+                return tf.tensor2d([], [0, 2]);
+            }
+
+            // Erstellen einen neuen Tensor aus den gefilterten Punkten.
+            return tf.tensor2d(points);
         });
     }
 
