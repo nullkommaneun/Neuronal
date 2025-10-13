@@ -8,78 +8,37 @@ body {
     margin: 0;
     padding: 20px;
 }
+h1, h2, h3 { color: #1e3a5f; }
+#main-container { display: flex; gap: 20px; align-items: flex-start; }
+#canvas { border: 1px solid #ccc; background-color: #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+#controls { width: 300px; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+#diagnostics-panel .badge { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; margin-bottom: 5px; border-radius: 5px; background-color: #e9ecef; font-weight: 500; }
+#diagnostics-panel .status { width: 12px; height: 12px; border-radius: 50%; background-color: #adb5bd; }
+#diagnostics-panel .status.success { background-color: #28a745; }
+#diagnostics-panel .status.error { background-color: #dc3545; }
+hr { border: 1px solid #eee; margin: 20px 0; }
+#debug-console { background-color: #2b2b2b; color: #f1f1f1; border-radius: 4px; padding: 10px; height: 150px; overflow-y: scroll; font-family: 'Courier New', Courier, monospace; font-size: 12px; }
+#debug-output div { margin-bottom: 2px; }
 
-h1, h2, h3 {
-    color: #1e3a5f;
-}
-
-#main-container {
-    display: flex;
-    gap: 20px;
-    align-items: flex-start;
-}
-
-#canvas {
-    border: 1px solid #ccc;
-    background-color: #fff;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-
-#controls {
-    width: 300px;
-    padding: 20px;
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-}
-
-#diagnostics-panel .badge {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 12px;
-    margin-bottom: 5px;
+/* NEU: Styling für den Knopf */
+#start-stop-button {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
     border-radius: 5px;
-    background-color: #e9ecef;
-    font-weight: 500;
+    background-color: #28a745;
+    color: white;
+    transition: background-color 0.2s;
 }
-
-#diagnostics-panel .status {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background-color: #adb5bd; /* Default: Pending */
+#start-stop-button:hover {
+    background-color: #218838;
 }
-
-#diagnostics-panel .status.success {
-    background-color: #28a745; /* Green */
+#start-stop-button.running {
+    background-color: #dc3545; /* Rot, wenn die Simulation läuft */
 }
-
-#diagnostics-panel .status.error {
-    background-color: #dc3545; /* Red */
-}
-
-hr {
-    border: 1px solid #eee;
-    margin: 20px 0;
-}
-
-/* NEU: Styling für die On-Screen Debug-Konsole */
-#debug-console {
-    background-color: #2b2b2b;
-    color: #f1f1f1;
-    border-radius: 4px;
-    padding: 10px;
-    height: 150px;
-    overflow-y: scroll; /* Macht den Inhalt scrollbar */
-    font-family: 'Courier New', Courier, monospace;
-    font-size: 12px;
-}
-
-#debug-output .log-error {
-    color: #ff6b6b; /* Rote Farbe für Fehler */
-}
-
-#debug-output .log-info {
-    color: #a9b7c6; /* Normale Log-Farbe */
+#start-stop-button.running:hover {
+    background-color: #c82333;
 }
