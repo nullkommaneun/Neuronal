@@ -3,9 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KI Sofa-Optimierer (DEBUG-MODUS)</title>
+    <title>KI Sofa-Optimierer</title>
     <link rel="stylesheet" href="style.css">
-    </head>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+</head>
 <body>
     <h1>KI lernt das perfekte Sofa</h1>
     <div id="main-container">
@@ -13,19 +14,18 @@
         <div id="controls">
             <h2>Diagnose & Steuerung</h2>
             <div id="diagnostics-panel">
-                <div class="badge">JavaScript <span class="status"></span></div>
-                <div class="badge">Module <span class="status"></span></div>
-                <div class="badge">TensorFlow.js <span class="status"></span></div>
-                <div class="badge">TF Backend <span class="status"></span></div>
-                <div class="badge">AI Model <span class="status"></span></div>
+                <div class="badge" id="diag-js">JavaScript <span class="status"></span></div>
+                <div class="badge" id="diag-modules">Module <span class="status"></span></div>
+                <div class="badge" id="diag-tf">TensorFlow.js <span class="status"></span></div>
+                <div class="badge" id="diag-backend">TF Backend <span class="status"></span></div>
+                <div class="badge" id="diag-ai">AI Model <span class="status"></span></div>
             </div>
             <hr>
             <h3>Trainingsphase</h3>
-            <p>Phase 1: Kollisionsfreie Form finden</p>
+            <p id="training-phase-display">Phase 1: Kollisionsfreie Form finden</p>
             <h3>Statistiken</h3>
-            <p>Kollisionsverlust: -</p>
-            <p>Flächen-Belohnung: -</p>
-            
+            <p id="stats-collision-loss">Kollisionsverlust: -</p>
+            <p id="stats-area-reward">Flächen-Belohnung: -</p>
             <hr>
             <h3>Debug Konsole</h3>
             <div id="debug-console">
