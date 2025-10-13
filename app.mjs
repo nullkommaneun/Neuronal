@@ -1,6 +1,6 @@
-// app.mjs (Optimiert: Cache Busting, Entkoppeltes Training/Rendering, Neue Strategie)
+// app.mjs (Optimiert, Entkoppelt und Syntax-Kompatibilität maximiert)
 
-// WICHTIG: Keine statischen Imports mehr (für Cache Busting).
+// WICHTIG: Keine statischen Imports (für Cache Busting).
 
 // === Globale Variablen & UI-Elemente ===
 const canvas = document.getElementById('canvas');
@@ -16,12 +16,11 @@ let Corridor, Sofa;
 let corridor, sofa;
 
 let trainingPhase = 1;
-// (3) STRATEGIE: Nutze stabilityHistory, um das Wachstum zu messen.
 const stabilityHistory = [];
 const STABILITY_PERIOD = 100;
 let animationT = 0;
 
-// (2) ENTKOPPLUNG: Getrennte Steuerung für Rendering und Training
+// Getrennte Steuerung für Rendering und Training
 let isRenderingRunning = false;
 let isTrainingRunning = false;
 
@@ -42,14 +41,14 @@ function updateUI() {
     areaRewardDisplay.innerText = `Flächen-Belohnung: ${latestStats.areaReward.toFixed(5)}`;
 }
 
-// === (2) Unabhängige Trainingsschleife (Läuft im Hintergrund) ===
+// === Unabhängige Trainingsschleife (Läuft im Hintergrund) ===
 async function trainingLoop() {
     if (!isTrainingRunning) return;
 
     try {
         let lambdaCollision, lambdaArea;
 
-        // (3) NEUE TRAININGSPHASEN (Entscheidend für Sichtbarkeit):
+        // TRAININGSPHASEN (Entscheidend für Sichtbarkeit):
         if (trainingPhase === 1) {
             // Phase 1: Wachstumsphase. Starker Anreiz zum Wachsen.
             lambdaCollision = 1.0;
@@ -70,7 +69,7 @@ async function trainingLoop() {
 
         updateUI();
 
-        // (3) LOGIK FÜR PHASENWECHSEL: Basierend auf Stabilität der Fläche.
+        // LOGIK FÜR PHASENWECHSEL: Basierend auf Stabilität der Fläche.
         if (trainingPhase === 1) {
             stabilityHistory.push(latestStats.areaReward);
 
@@ -91,7 +90,7 @@ async function trainingLoop() {
             }
         }
 
-        // OPTIMIERUNG: Plane den nächsten Schritt sofort (setTimeout erlaubt dem Browser zu atmen).
+        // Plane den nächsten Schritt sofort (setTimeout erlaubt dem Browser zu atmen).
         setTimeout(trainingLoop, 0);
 
     } catch (error) {
@@ -99,7 +98,7 @@ async function trainingLoop() {
     }
 }
 
-// === (2) Unabhängige Rendering-Schleife (Läuft flüssig mit 60 FPS) ===
+// === Unabhängige Rendering-Schleife (Läuft flüssig mit 60 FPS) ===
 async function renderingLoop() {
     if (!isRenderingRunning) return;
 
@@ -128,7 +127,7 @@ function handleFatalError(error, loopName) {
 // === Zeichenfunktion ===
 async function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    corridor.draw(ctx);
+    if (corridor) corridor.draw(ctx);
 
     if (sofa && sofa.model) {
         // Animationsposition aktualisieren (sorgt für Bewegung)
@@ -142,13 +141,15 @@ async function draw() {
         const shapePointsTensor = await sofa.getShapePointsAsync();
 
         if (shapePointsTensor.shape[0] > 0) {
+            // Daten asynchron von GPU auf CPU laden.
             const shapePointsArray = await shapePointsTensor.array();
+            // CPU-Transformation nutzen.
             const transformedPoints = sofa.transformPointsJS(shapePointsArray, currentPos.x, currentPos.y, currentPos.angle);
              if (transformedPoints && transformedPoints.length > 0) {
                 maxDepth = Math.max(0, ...transformedPoints.map(p => corridor.getPenetrationDepth(p[0], p[1])));
             }
         }
-        shapePointsTensor.dispose();
+        shapePointsTensor.dispose(); // Wichtig: Speicher freigeben.
 
         // Färbung.
         let sofaColor = 'rgba(46, 204, 113, 0.7)'; // Grün
@@ -184,11 +185,14 @@ async function main() {
     try {
         log("Stufe 1: Lade JS/Module...");
 
-        // (4) CACHE BUSTING IMPLEMENTIERUNG
-        // Fügt einen Zeitstempel hinzu, um das Neuladen zu erzwingen.
+        // CACHE BUSTING IMPLEMENTIERUNG
         const version = Date.now();
-        const CorridorModule = await import(`./corridor.mjs?v=${version}`);
-        const SofaModule = await import(`./sofa.mjs?v=${version}`);
+
+        // KORREKTUR: Verwende Standard-String-Verkettung für maximale Kompatibilität
+        // beim dynamischen Import (anstelle von Template Literals).
+        const CorridorModule = await import('./corridor.mjs?v=' + version);
+        const SofaModule = await import('./sofa.mjs?v=' + version);
+
         Corridor = CorridorModule.Corridor;
         Sofa = SofaModule.Sofa;
 
@@ -206,7 +210,7 @@ async function main() {
         log(`-> OK (Backend: ${tf.getBackend()})`);
 
         log("Stufe 4: Lade Umgebung...");
-        corridor = new Corridor(800, 600);
+        corridor = new Corridor(); // Konstruktor benötigt keine Argumente mehr
         log("-> OK");
 
         log("Stufe 5: Init KI-Modell (INR)...");
@@ -225,6 +229,7 @@ async function main() {
         startStopButton.disabled = false;
 
     } catch (error) {
+        // Fängt Syntaxfehler beim Import und andere Init-Fehler ab.
         handleFatalError(error, "Init");
     }
 }
