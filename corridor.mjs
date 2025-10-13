@@ -1,25 +1,25 @@
-// corridor.mjs (Vollständiger Code)
-
-/**
- * Definiert die Physik und Geometrie der Umgebung.
- */
+// corridor.mjs (Korrigierte Geometrie)
 export class Corridor {
     constructor(canvasWidth, canvasHeight) {
         // Definiert die Wände des Korridors als Polygone.
         this.walls = [
-            { x: 100, y: 100, width: 600, height: 20 },
-            { x: 100, y: 480, width: 600, height: 20 },
-            { x: 100, y: 120, width: 20, height: 180 },
-            { x: 280, y: 300, width: 20, height: 180 },
-            { x: 700, y: 120, width: 20, height: 360 },
-            { x: 120, y: 300, width: 160, height: 20 },
+            // Außenwände
+            { x: 100, y: 100, width: 600, height: 20 }, // Obere Wand
+            { x: 100, y: 500, width: 600, height: 20 }, // Untere Wand
+            { x: 100, y: 120, width: 20, height: 200 }, // Linke obere Wand
+            { x: 700, y: 120, width: 20, height: 380 }, // Rechte Wand
+            
+            // Innenwände der Ecke
+            { x: 120, y: 300, width: 400, height: 20 },
+            { x: 500, y: 320, width: 20, height: 180 },
         ];
+
         // Definiert den festen Pfad von A nach B
         this.path = [
-            { x: 150, y: 210, angle: 0 },
-            { x: 400, y: 210, angle: 0 },
-            { x: 400, y: 400, angle: Math.PI / 2},
-            { x: 650, y: 400, angle: 0 }
+            { x: 150, y: 200, angle: 0 },         // Start A
+            { x: 400, y: 200, angle: 0 },         // Mitte, vor der Ecke
+            { x: 600, y: 400, angle: -Math.PI / 2}, // Nach der Ecke
+            { x: 300, y: 400, angle: -Math.PI},   // Ende B
         ];
     }
 
@@ -31,10 +31,7 @@ export class Corridor {
                 const depthX2 = (wall.x + wall.width) - x;
                 const depthY1 = y - wall.y;
                 const depthY2 = (wall.y + wall.height) - y;
-                const currentDepth = Math.min(depthX1, depthX2, depthY1, depthY2);
-                if (currentDepth > maxDepth) {
-                    maxDepth = currentDepth;
-                }
+                maxDepth = Math.max(maxDepth, Math.min(depthX1, depthX2, depthY1, depthY2));
             }
         }
         return maxDepth;
@@ -57,6 +54,6 @@ export class Corridor {
         ctx.font = "bold 20px Arial";
         ctx.fillText("A", this.path[0].x - 25, this.path[0].y + 5);
         ctx.fillStyle = "#c0392b";
-        ctx.fillText("B", this.path[this.path.length - 1].x + 10, this.path[this.path.length - 1].y + 5);
+        ctx.fillText("B", this.path[this.path.length - 1].x - 25, this.path[this.path.length - 1].y + 5);
     }
 }
