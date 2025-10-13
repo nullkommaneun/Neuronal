@@ -1,30 +1,37 @@
-// app.mjs (Finaler Code mit Start/Stopp-Logik)
+// app.mjs (Finale, geprüfte Version)
 import { Corridor } from './corridor.mjs';
 import { Sofa } from './sofa.mjs';
 
+// === Globale Variablen & UI-Elemente ===
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 const debugOutput = document.getElementById('debug-output');
 const phaseDisplay = document.getElementById('training-phase-display');
 const collisionLossDisplay = document.getElementById('stats-collision-loss');
 const areaRewardDisplay = document.getElementById('stats-area-reward');
-const startStopButton = document.getElementById('start-stop-button'); // NEU
+const startStopButton = document.getElementById('start-stop-button');
 
 let corridor, sofa;
 let trainingPhase = 1;
 const collisionLossHistory = [];
 const STABILITY_PERIOD = 100;
 let animationT = 0;
-let isSimulationRunning = false; // NEU: Steuer-Variable
+let isSimulationRunning = false; // Steuer-Variable für die Animation
 
-function updateDiagStatus(id, status) { /* ... (unverändert) ... */ }
-function log(message, isError = false) { /* ... (unverändert) ... */ }
-// Unveränderte Helferfunktionen
-function updateDiagStatus(id, status) { const statusEl = document.querySelector(`#${id} .status`); if (statusEl) statusEl.className = `status ${status}`; }
-function log(message, isError = false) { const color = isError ? '#ff6b6b' : '#f1f1f1'; debugOutput.innerHTML += `<div style="color: ${color};">> ${message}</div>`; debugOutput.scrollTop = debugOutput.scrollHeight; }
+// === UI-Helfer ===
+function updateDiagStatus(id, status) {
+    const statusEl = document.querySelector(`#${id} .status`);
+    if (statusEl) statusEl.className = `status ${status}`;
+}
+function log(message, isError = false) {
+    const color = isError ? '#ff6b6b' : '#f1f1f1';
+    debugOutput.innerHTML += `<div style="color: ${color};">> ${message}</div>`;
+    debugOutput.scrollTop = debugOutput.scrollHeight;
+}
 
+// === Haupt-Animations- und Trainingsschleife ===
 async function gameLoop() {
-    // NEU: Die Schleife stoppt sich selbst, wenn die Variable false ist
+    // Die Schleife stoppt sich selbst, wenn die Steuerungsvariable 'false' ist.
     if (!isSimulationRunning) return;
 
     try {
@@ -55,11 +62,11 @@ async function gameLoop() {
         isSimulationRunning = false; // Stoppe die Simulation bei einem Fehler
         startStopButton.innerText = "Fehler - Neu laden";
         startStopButton.disabled = true;
+        startStopButton.classList.remove('running');
     }
 }
 
-async function draw() { /* ... (unverändert, zeichnet Korridor & Sofa) ... */ }
-// Unveränderte draw Funktion
+// === Zeichenfunktion (unverändert) ===
 async function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     corridor.draw(ctx);
@@ -99,6 +106,7 @@ async function draw() {
     }
 }
 
+// === Haupt-Initialisierungsfunktion ===
 async function main() {
     try {
         log("Stufe 1: Lade JS/Module..."); updateDiagStatus('diag-js', 'success'); updateDiagStatus('diag-modules', 'success'); log("-> OK");
@@ -112,9 +120,8 @@ async function main() {
         corridor.draw(ctx);
 
         log("<strong style='color: #28a745;'>Init komplett. Bereit zum Start.</strong>");
-        startStopButton.disabled = false;
+        startStopButton.disabled = false; // Knopf aktivieren
         
-        // WICHTIG: Die gameLoop wird NICHT mehr automatisch gestartet
     } catch (error) {
         log(`FATALER FEHLER bei Init: ${error.message}`, true);
         startStopButton.innerText = "Fehler - Neu laden";
@@ -122,8 +129,9 @@ async function main() {
     }
 }
 
-// NEU: Event Listener für den Knopf
-startStopButton.disabled = true; // Deaktiviert, bis die Initialisierung abgeschlossen ist
+// === Event Listener für den Knopf ===
+// Dieser Code wird erst nach der Definition der Funktionen ausgeführt.
+startStopButton.disabled = true; // Knopf ist anfangs deaktiviert
 startStopButton.addEventListener('click', () => {
     isSimulationRunning = !isSimulationRunning;
     if (isSimulationRunning) {
@@ -138,5 +146,5 @@ startStopButton.addEventListener('click', () => {
     }
 });
 
-// Starte nur noch die Initialisierung
+// Starte die Initialisierung
 main();
