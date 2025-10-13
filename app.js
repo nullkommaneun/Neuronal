@@ -1,4 +1,45 @@
-// app.js (finale Version)
+// =======================================================
+// ====== ON-SCREEN DEBUG KONSOLE - START ======
+// Dieser Block MUSS ganz am Anfang der Datei stehen.
+// =======================================================
+const debugOutput = document.getElementById('debug-output');
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
+function logToScreen(message, type = 'log-info') {
+    if (debugOutput) {
+        const line = document.createElement('div');
+        line.className = type;
+        // Konvertiere Objekte in lesbaren Text (JSON)
+        if (typeof message === 'object') {
+            message = JSON.stringify(message, null, 2);
+        }
+        line.textContent = `> ${message}`;
+        debugOutput.appendChild(line);
+        // Automatisch nach unten scrollen
+        debugOutput.scrollTop = debugOutput.scrollHeight;
+    }
+}
+
+console.log = function() { // Geändert, um alle Argumente zu verarbeiten
+    originalConsoleLog.apply(console, arguments);
+    logToScreen(Array.from(arguments).join(' '), 'log-info');
+};
+
+console.error = function() { // Geändert, um alle Argumente zu verarbeiten
+    originalConsoleError.apply(console, arguments);
+    logToScreen(`ERROR: ${Array.from(arguments).join(' ')}`, 'log-error');
+};
+
+// Fängt alle nicht abgefangenen Fehler global ab. Das ist der wichtigste Teil!
+window.onerror = function(message, source, lineno, colno, error) {
+    console.error(`Uncaught Error: "${message}" in ${source} at line ${lineno}`);
+    return true; // Verhindert, dass der Browser-Standard-Fehlerdialog erscheint
+};
+// =======================================================
+// ====== ON-SCREEN DEBUG KONSOLE - ENDE ======
+// =======================================================
+
 import { Corridor } from './corridor.js';
 import { Sofa } from './sofa.js';
 
@@ -127,28 +168,38 @@ async function draw() {
  */
 async function main() {
     try {
+        console.log("Anwendung wird initialisiert...");
         updateDiagStatus('diag-js', true);
+        console.log("JS/Module geladen.");
         updateDiagStatus('diag-modules', true);
 
-        if (typeof tf === 'undefined') throw new Error("TensorFlow.js nicht gefunden.");
+        if (typeof tf === 'undefined') throw new Error("TensorFlow.js (tf) ist nicht definiert.");
+        console.log("TensorFlow.js gefunden.");
         updateDiagStatus('diag-tf', true);
+        
         await tf.setBackend('webgl');
         await tf.ready();
+        console.log(`TF Backend (${tf.getBackend()}) ist bereit.`);
         updateDiagStatus('diag-backend', true);
         
         corridor = new Corridor(canvas.width, canvas.height);
+        console.log("Korridor-Umgebung erstellt.");
         sofa = new Sofa();
         sofa.init();
         
         if (!sofa.model) throw new Error("KI-Modell konnte nicht erstellt werden.");
+        console.log("KI-Sofa-Modell erfolgreich erstellt.");
         updateDiagStatus('diag-ai', true);
 
-        // Starte die Hauptschleife
+        console.log("Initialisierung abgeschlossen. Starte Game-Loop...");
         gameLoop();
     } catch (error) {
-        console.error("Initialisierung fehlgeschlagen:", error);
-        // Fehler im UI anzeigen
+        console.error(error.message);
+        // Fehler im UI anzeigen, z.B. das verantwortliche Badge rot färben
+        if (error.message.includes("TensorFlow")) updateDiagStatus('diag-tf', false);
+        else if (error.message.includes("Modell")) updateDiagStatus('diag-ai', false);
     }
 }
 
 main();
+
