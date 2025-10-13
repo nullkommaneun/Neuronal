@@ -1,6 +1,6 @@
-// app.mjs (Optimiert, Entkoppelt und Syntax-Kompatibilität maximiert)
+// app.mjs (Optimiertes Rendering, Verbesserte Reaktionsfähigkeit)
 
-// WICHTIG: Keine statischen Imports (für Cache Busting).
+// (Keine statischen Imports für Cache Busting)
 
 // === Globale Variablen & UI-Elemente ===
 const canvas = document.getElementById('canvas');
@@ -11,7 +11,6 @@ const collisionLossDisplay = document.getElementById('stats-collision-loss');
 const areaRewardDisplay = document.getElementById('stats-area-reward');
 const startStopButton = document.getElementById('start-stop-button');
 
-// Klassen-Referenzen und Instanzen
 let Corridor, Sofa;
 let corridor, sofa;
 
@@ -20,7 +19,6 @@ const stabilityHistory = [];
 const STABILITY_PERIOD = 100;
 let animationT = 0;
 
-// Getrennte Steuerung für Rendering und Training
 let isRenderingRunning = false;
 let isTrainingRunning = false;
 
@@ -40,24 +38,31 @@ function updateUI() {
     collisionLossDisplay.innerText = `Kollisionsverlust: ${latestStats.collisionLoss.toFixed(5)}`;
     areaRewardDisplay.innerText = `Flächen-Belohnung: ${latestStats.areaReward.toFixed(5)}`;
 }
+function handleFatalError(error, loopName) {
+    log(`FATALER FEHLER im ${loopName}: ${error.message}`, true);
+    console.error(error);
+    isTrainingRunning = false;
+    isRenderingRunning = false;
+    startStopButton.innerText = "Fehler - Neu laden";
+    startStopButton.disabled = true;
+    startStopButton.classList.remove('running');
+}
 
-// === Unabhängige Trainingsschleife (Läuft im Hintergrund) ===
+// === Unabhängige Trainingsschleife ===
 async function trainingLoop() {
     if (!isTrainingRunning) return;
 
     try {
         let lambdaCollision, lambdaArea;
 
-        // TRAININGSPHASEN (Entscheidend für Sichtbarkeit):
+        // TRAININGSPHASEN
         if (trainingPhase === 1) {
-            // Phase 1: Wachstumsphase. Starker Anreiz zum Wachsen.
-            lambdaCollision = 1.0;
-            lambdaArea = 5.0;
+            // Phase 1: Wachsen priorisieren
+            lambdaCollision = 1.0; lambdaArea = 5.0;
             phaseDisplay.innerText = "Phase 1: Wachsen und Form finden";
         } else {
-            // Phase 2: Verfeinerungsphase. Starke Kollisionsstrafe.
-            lambdaCollision = 10.0;
-            lambdaArea = 2.0;
+            // Phase 2: Kollisionen stark bestrafen
+            lambdaCollision = 10.0; lambdaArea = 2.0;
             phaseDisplay.innerText = "Phase 2: Kollisionen eliminieren";
         }
 
@@ -69,20 +74,18 @@ async function trainingLoop() {
 
         updateUI();
 
-        // LOGIK FÜR PHASENWECHSEL: Basierend auf Stabilität der Fläche.
+        // LOGIK FÜR PHASENWECHSEL (Basierend auf Stabilität des Wachstums)
         if (trainingPhase === 1) {
             stabilityHistory.push(latestStats.areaReward);
 
             if (stabilityHistory.length > STABILITY_PERIOD) {
                 stabilityHistory.shift();
 
-                // Berechne Durchschnitt über den gesamten Zeitraum.
                 const avgTotal = stabilityHistory.reduce((a, b) => a + b, 0) / STABILITY_PERIOD;
-                // Berechne Durchschnitt der letzten 10 Schritte.
                 const recentHistory = stabilityHistory.slice(-10);
                 const avgRecent = recentHistory.reduce((a, b) => a + b, 0) / 10;
 
-                // Wechsle, wenn das Wachstum stabil ist (geringe Abweichung) UND das Sofa eine Mindestgröße hat.
+                // Wechsle, wenn das Wachstum stabil ist und eine Mindestgröße erreicht wurde.
                 if (Math.abs(avgRecent - avgTotal) < 0.0001 && avgTotal > 0.1) {
                     trainingPhase = 2;
                     log("WECHSLE ZU PHASE 2! (Wachstum stabilisiert)");
@@ -90,73 +93,78 @@ async function trainingLoop() {
             }
         }
 
-        // Plane den nächsten Schritt sofort (setTimeout erlaubt dem Browser zu atmen).
-        setTimeout(trainingLoop, 0);
+        // (REAKTIONSFÄHIGKEIT) Warten auf den nächsten Animationsframe (ersetzt setTimeout(0)).
+        // Dies gibt dem Browser Zeit zum Rendern der UI, bevor der nächste Schritt beginnt.
+        await tf.nextFrame();
+        // Rekursiver Aufruf für den nächsten Schritt.
+        trainingLoop();
 
     } catch (error) {
         handleFatalError(error, "Training-Loop");
     }
 }
 
-// === Unabhängige Rendering-Schleife (Läuft flüssig mit 60 FPS) ===
+// === Unabhängige Rendering-Schleife ===
 async function renderingLoop() {
     if (!isRenderingRunning) return;
-
     try {
-        // Zeichne den aktuellen Zustand.
         await draw();
-        // Plane den nächsten Frame für flüssige Animation.
         requestAnimationFrame(renderingLoop);
     } catch (error) {
         handleFatalError(error, "Rendering-Loop");
     }
 }
 
-// Hilfsfunktion für Fehlerbehandlung
-function handleFatalError(error, loopName) {
-    log(`FATALER FEHLER im ${loopName}: ${error.message}`, true);
-    console.error(error);
-    isTrainingRunning = false;
-    isRenderingRunning = false;
-    startStopButton.innerText = "Fehler - Neu laden";
-    startStopButton.disabled = true;
-    startStopButton.classList.remove('running');
-}
 
-
-// === Zeichenfunktion ===
+// === Zeichenfunktion (GRUNDLEGEND OPTIMIERT) ===
 async function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     if (corridor) corridor.draw(ctx);
 
     if (sofa && sofa.model) {
-        // Animationsposition aktualisieren (sorgt für Bewegung)
+        // Animationsposition aktualisieren
         animationT = (animationT + 0.005) % 1.0;
         const currentPos = sofa.getPointOnPath(corridor.path, animationT);
 
-        const shapeValues = await sofa.getShapeForDrawing();
+        // (PERFORMANCE) Hole Daten und Tensor gleichzeitig von der neuen Funktion.
+        const shape = await sofa.getShapeForDrawing();
+        const shapeValuesData = shape.data;   // CPU-Daten für Pixel
+        const shapeValuesTensor = shape.tensor; // GPU-Tensor für Berechnung
 
-        // Kollisionsberechnung für Färbung.
+        // --- Kollisionsberechnung für Färbung (Integriert und Optimiert) ---
         let maxDepth = 0;
-        const shapePointsTensor = await sofa.getShapePointsAsync();
 
-        if (shapePointsTensor.shape[0] > 0) {
-            // Daten asynchron von GPU auf CPU laden.
-            const shapePointsArray = await shapePointsTensor.array();
-            // CPU-Transformation nutzen.
+        // 1. Finde Punkte im Inneren (GPU), nutze den Tensor.
+        const isInside = shapeValuesTensor.greater(0).flatten();
+        const indices = await tf.whereAsync(isInside);
+
+        if (indices.shape[0] > 0) {
+            // 2. Extrahiere Punkte (GPU).
+            const points = tf.gather(sofa.grid, indices.flatten());
+            // 3. Lade Punkte herunter (Async).
+            const shapePointsArray = await points.array();
+            points.dispose();
+
+            // 4. Transformiere Punkte (CPU).
             const transformedPoints = sofa.transformPointsJS(shapePointsArray, currentPos.x, currentPos.y, currentPos.angle);
-             if (transformedPoints && transformedPoints.length > 0) {
+
+            // 5. Berechne Tiefe (CPU).
+            if (transformedPoints && transformedPoints.length > 0) {
                 maxDepth = Math.max(0, ...transformedPoints.map(p => corridor.getPenetrationDepth(p[0], p[1])));
             }
         }
-        shapePointsTensor.dispose(); // Wichtig: Speicher freigeben.
 
-        // Färbung.
+        // WICHTIG: Speicherbereinigung der Tensoren.
+        isInside.dispose();
+        indices.dispose();
+        shapeValuesTensor.dispose(); // Tensor aus getShapeForDrawing freigeben.
+
+        // --- Färbung ---
         let sofaColor = 'rgba(46, 204, 113, 0.7)'; // Grün
         if (maxDepth > 0.1) sofaColor = 'rgba(231, 76, 60, 0.7)'; // Rot
         else if (maxDepth > 0) sofaColor = 'rgba(52, 152, 219, 0.7)'; // Blau
 
-        // Zeichnen.
+        // --- Zeichnen der Pixel ---
         ctx.fillStyle = sofaColor;
         ctx.save();
         ctx.translate(currentPos.x, currentPos.y);
@@ -169,7 +177,8 @@ async function draw() {
         for (let i = 0; i < res; i++) {
             for (let j = 0; j < res; j++) {
                 const index = i * res + j;
-                if (shapeValues[index] > 0) {
+                // Nutze die heruntergeladenen Daten (shapeValuesData) für den Pixel-Check.
+                if (shapeValuesData[index] > 0) {
                     const x = (j / res - 0.5) * sofaScale;
                     const y = (i / res - 0.5) * sofaScale;
                     ctx.fillRect(x, y, pixelSize, pixelSize);
@@ -180,16 +189,14 @@ async function draw() {
     }
 }
 
-// === Haupt-Initialisierungsfunktion ===
+// === Haupt-Initialisierungsfunktion (Mit Cache Busting) ===
 async function main() {
     try {
         log("Stufe 1: Lade JS/Module...");
 
-        // CACHE BUSTING IMPLEMENTIERUNG
+        // CACHE BUSTING (Stellt sicher, dass das neue sofa.mjs geladen wird)
         const version = Date.now();
-
-        // KORREKTUR: Verwende Standard-String-Verkettung für maximale Kompatibilität
-        // beim dynamischen Import (anstelle von Template Literals).
+        // Nutze String-Verkettung für maximale Kompatibilität.
         const CorridorModule = await import('./corridor.mjs?v=' + version);
         const SofaModule = await import('./sofa.mjs?v=' + version);
 
@@ -198,11 +205,11 @@ async function main() {
 
         updateDiagStatus('diag-js', 'success'); updateDiagStatus('diag-modules', 'success'); log("-> OK (Cache Busting aktiv)");
 
-        log("Stufe 2: Lade TensorFlow.js..."); if (typeof tf === 'undefined') throw new Error("Das 'tf'-Objekt wurde nicht gefunden."); updateDiagStatus('diag-tf', 'success'); log("-> OK");
+        log("Stufe 2: Lade TensorFlow.js..."); if (typeof tf === 'undefined') throw new Error("tf nicht gefunden."); updateDiagStatus('diag-tf', 'success'); log("-> OK");
 
-        log("Stufe 3: Init TF Backend (WebGL)...");
+        log("Stufe 3: Init TF Backend...");
         await tf.setBackend('webgl').catch(() => {
-            log("WARNUNG: WebGL nicht verfügbar. Nutze CPU-Backend.", true);
+            log("WARNUNG: WebGL nicht verfügbar. Nutze CPU.", true);
             return tf.setBackend('cpu');
         });
         await tf.ready();
@@ -210,37 +217,33 @@ async function main() {
         log(`-> OK (Backend: ${tf.getBackend()})`);
 
         log("Stufe 4: Lade Umgebung...");
-        corridor = new Corridor(); // Konstruktor benötigt keine Argumente mehr
+        // Annahme: Corridor Konstruktor benötigt keine Argumente basierend auf vorherigem Code.
+        corridor = new Corridor();
         log("-> OK");
 
-        log("Stufe 5: Init KI-Modell (INR)...");
+        log("Stufe 5: Init KI-Modell...");
         sofa = new Sofa();
         sofa.init();
-        if (!sofa || !sofa.model) throw new Error("Sofa-Objekt konnte nicht erstellt werden.");
         updateDiagStatus('diag-ai', 'success');
         log("-> OK");
 
         // Initiales Zeichnen
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        corridor.draw(ctx);
+        if (corridor) corridor.draw(ctx);
         updateUI();
 
         log("<strong style='color: #28a745;'>Init komplett. Bereit zum Start.</strong>");
         startStopButton.disabled = false;
 
     } catch (error) {
-        // Fängt Syntaxfehler beim Import und andere Init-Fehler ab.
         handleFatalError(error, "Init");
     }
 }
 
-// === Event Listener für den Knopf ===
+// === Event Listener ===
 startStopButton.disabled = true;
 startStopButton.addEventListener('click', () => {
-    if (!Corridor || !Sofa) {
-        log("Warte auf Module...", true);
-        return;
-    }
+    if (!Corridor || !Sofa) return;
 
     const shouldRun = !isTrainingRunning;
     isTrainingRunning = shouldRun;
@@ -250,8 +253,8 @@ startStopButton.addEventListener('click', () => {
         startStopButton.innerText = "Simulation stoppen";
         startStopButton.classList.add('running');
         log("Simulation gestartet...");
-        trainingLoop();  // Starte die unabhängige Trainingsschleife
-        renderingLoop(); // Starte die unabhängige Rendering-Schleife
+        trainingLoop();
+        renderingLoop();
     } else {
         startStopButton.innerText = "Simulation starten";
         startStopButton.classList.remove('running');
