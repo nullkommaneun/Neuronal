@@ -1,4 +1,4 @@
-// sofa.mjs (Endgültiger, geprüfter Code mit erweiterter Diagnose)
+// sofa.mjs (Endgültiger, geprüfter Code)
 export class Sofa {
     constructor() {
         this.model = null;
@@ -26,27 +26,15 @@ export class Sofa {
     }
 
     trainStep(corridor, lambdaCollision, lambdaArea) {
-        // Erweiterte Diagnose: Zeigt den "Herzschlag" der KI
-        // console.log("--- TrainStep Start ---");
-
         return tf.tidy(() => {
-            // **DIE ROBUSTE LÖSUNG**
-            // Wir verwenden die optimizer.minimize-Funktion. Sie kombiniert die
-            // Verlustberechnung und die Aktualisierung der Gewichte sicher in einem Schritt.
-            this.optimizer.minimize(() => {
+            const lossFunction = () => {
                 const sofaPoints = this.getShapePoints();
-                // Erweiterte Diagnose
-                // console.log(`Sofa besteht aus ${sofaPoints.shape[0]} Punkten.`);
-
                 if (sofaPoints.shape[0] === 0) {
                     const shapeValues = this.model.predict(this.grid);
                     const area = tf.relu(shapeValues).mean();
-                    const loss = area.mul(-1).mul(lambdaArea);
-                    // console.log(`Verlust (nur Fläche): ${loss.dataSync()[0]}`);
-                    return loss;
+                    return area.mul(-1).mul(lambdaArea);
                 }
 
-                // 1. Kollisionsverlust
                 let totalPenetration = tf.tensor(0.0);
                 const pathSamples = [0, 0.25, 0.5, 0.75, 1.0];
                 for (const t of pathSamples) {
@@ -57,20 +45,23 @@ export class Sofa {
                 }
                 const collisionLoss = totalPenetration.mul(lambdaCollision);
 
-                // 2. Flächen-Belohnung (als negativer Verlust)
                 const shapeValues = this.model.predict(this.grid);
                 const area = tf.relu(shapeValues).mean();
                 const areaLoss = area.mul(-1).mul(lambdaArea);
 
-                const totalLoss = collisionLoss.add(areaLoss);
-                // Erweiterte Diagnose
-                // console.log(`Verlust (Kollision+Fläche): ${totalLoss.dataSync()[0]}`);
-                return totalLoss;
-            }, /* returnLoss */ false, this.model.trainableWeights);
+                return collisionLoss.add(areaLoss);
+            };
+
+            // **DIE ENDGÜLTIGE KORREKTUR**
+            // Wir nutzen die empfohlene .minimize() Funktion des Optimierers.
+            // Sie berechnet den Verlust UND wendet die Änderungen auf die
+            // Gewichte des Modells ('this.model.trainableWeights') an.
+            // Das behebt den "varList"-Fehler endgültig.
+            this.optimizer.minimize(lossFunction, /* returnLoss */ false, this.model.trainableWeights);
 
 
             // Berechne die Verluste erneut nur für die Anzeige
-            const sofaPointsForStats = this.get_shape_points_robust();
+            const sofaPointsForStats = this.getShapePoints();
             let finalCollisionLoss = 0;
             if (sofaPointsForStats.shape[0] > 0) {
                 for (const t of [0, 0.25, 0.5, 0.75, 1.0]) {
@@ -84,8 +75,7 @@ export class Sofa {
         });
     }
 
-    // Robuste Methode, die wir bereits verifiziert haben
-    get_shape_points_robust() {
+    getShapePoints() {
         return tf.tidy(() => {
             const predictions = this.model.predict(this.grid);
             const isInside = predictions.greater(0);
@@ -102,11 +92,6 @@ export class Sofa {
             }
             return tf.tensor2d(points);
         });
-    }
-    
-    // Alias für die robuste Funktion
-    getShapePoints() {
-        return this.get_shape_points_robust();
     }
 
     async getShapeForDrawing() {
