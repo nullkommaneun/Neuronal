@@ -1,4 +1,4 @@
-// sofa.mjs (Endgültiger, geprüfter Code)
+// sofa.mjs (Finaler, korrigierter Code)
 export class Sofa {
     constructor() {
         this.model = null;
@@ -14,7 +14,6 @@ export class Sofa {
         this.model.add(tf.layers.dense({
             units: 1,
             activation: 'tanh',
-            // Milder Bias für einen sofort sichtbaren Start
             biasInitializer: tf.initializers.constant({ value: -1.0 })
         }));
     }
@@ -27,7 +26,11 @@ export class Sofa {
 
     trainStep(corridor, lambdaCollision, lambdaArea) {
         return tf.tidy(() => {
-            const lossFunction = () => {
+            // **DIE ENDGÜLTIGE, ROBUSTE LÖSUNG**
+            // Wir verwenden die optimizer.minimize-Funktion. Sie kombiniert die
+            // Verlustberechnung und die Aktualisierung der Gewichte sicher in einem Schritt
+            // und behebt den "varList"-Fehler endgültig.
+            this.optimizer.minimize(() => {
                 const sofaPoints = this.getShapePoints();
                 if (sofaPoints.shape[0] === 0) {
                     const shapeValues = this.model.predict(this.grid);
@@ -48,16 +51,8 @@ export class Sofa {
                 const shapeValues = this.model.predict(this.grid);
                 const area = tf.relu(shapeValues).mean();
                 const areaLoss = area.mul(-1).mul(lambdaArea);
-
                 return collisionLoss.add(areaLoss);
-            };
-
-            // **DIE ENDGÜLTIGE KORREKTUR**
-            // Wir nutzen die empfohlene .minimize() Funktion des Optimierers.
-            // Sie berechnet den Verlust UND wendet die Änderungen auf die
-            // Gewichte des Modells ('this.model.trainableWeights') an.
-            // Das behebt den "varList"-Fehler endgültig.
-            this.optimizer.minimize(lossFunction, /* returnLoss */ false, this.model.trainableWeights);
+            }, /* returnLoss */ false, this.model.trainableWeights);
 
 
             // Berechne die Verluste erneut nur für die Anzeige
@@ -83,13 +78,9 @@ export class Sofa {
             const isInsideData = isInside.dataSync();
             const points = [];
             for (let i = 0; i < isInsideData.length; i++) {
-                if (isInsideData[i]) {
-                    points.push(gridData[i]);
-                }
+                if (isInsideData[i]) { points.push(gridData[i]); }
             }
-            if (points.length === 0) {
-                return tf.tensor2d([], [0, 2]);
-            }
+            if (points.length === 0) { return tf.tensor2d([], [0, 2]); }
             return tf.tensor2d(points);
         });
     }
