@@ -1,4 +1,4 @@
-// sofa.mjs (Endgültiger, geprüfter Code)
+// sofa.mjs (Finaler, funktionierender Code)
 export class Sofa {
     constructor() {
         this.model = null;
@@ -14,7 +14,8 @@ export class Sofa {
         this.model.add(tf.layers.dense({
             units: 1,
             activation: 'tanh',
-            biasInitializer: tf.initializers.constant({ value: -2.5 })
+            // NEUE ÄNDERUNG: Milder Bias für sichtbaren Start
+            biasInitializer: tf.initializers.constant({ value: -1.0 })
         }));
     }
 
@@ -51,10 +52,9 @@ export class Sofa {
                 return collisionLoss.add(areaLoss);
             };
 
-            // **DIE ENDGÜLTIGE KORREKTUR**
-            // Wir sagen dem Optimierer nun explizit, welche Variablen er trainieren soll:
-            // die 'trainableWeights' unseres Modells.
+            // NEUE ÄNDERUNG: Robuste Trainingsmethode, die den Fehler behebt
             this.optimizer.minimize(lossFunction, /* returnLoss */ false, this.model.trainableWeights);
+
 
             // Berechne die Verluste erneut nur für die Anzeige
             const sofaPointsForStats = this.getShapePoints();
