@@ -1,6 +1,5 @@
 // =======================================================
 // ====== ON-SCREEN DEBUG KONSOLE - START ======
-// Dieser Block MUSS ganz am Anfang der Datei stehen.
 // =======================================================
 const debugOutput = document.getElementById('debug-output');
 const originalConsoleLog = console.log;
@@ -10,9 +9,7 @@ function logToScreen(message, type = 'log-info') {
     if (debugOutput) {
         const line = document.createElement('div');
         line.className = type;
-        if (typeof message === 'object') {
-            message = JSON.stringify(message, null, 2);
-        }
+        if (typeof message === 'object') { message = JSON.stringify(message, null, 2); }
         line.textContent = `> ${message}`;
         debugOutput.appendChild(line);
         debugOutput.scrollTop = debugOutput.scrollHeight;
@@ -37,9 +34,9 @@ window.onerror = function(message, source, lineno, colno, error) {
 // ====== ON-SCREEN DEBUG KONSOLE - ENDE ======
 // =======================================================
 
-// KORREKTUR: ./ hinzugefügt, um die Pfade explizit zu machen
-import { Corridor } from './corridor.js';
-import { Sofa } from './sofa.js';
+// KORREKTUR: Importiert jetzt die .mjs Dateien
+import { Corridor } from './corridor.mjs';
+import { Sofa } from './sofa.mjs';
 
 // --- Globale Variablen ---
 const canvas = document.getElementById('canvas');
