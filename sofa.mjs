@@ -1,4 +1,4 @@
-// sofa.mjs (Endgültiger, geprüfter Code)
+// sofa.mjs (Endgültiger Code mit robuster Trainingsmethode)
 export class Sofa {
     constructor() {
         this.model = null;
@@ -25,15 +25,23 @@ export class Sofa {
     }
 
     trainStep(corridor, lambdaCollision, lambdaArea) {
+        // tf.tidy() räumt den Speicher automatisch auf
         return tf.tidy(() => {
-            const lossFunction = () => {
+            // **DIE FINALE, ROBUSTE KORREKTUR**
+            // Wir verwenden die optimizer.minimize-Funktion. Sie ist der Standardweg,
+            // da sie die Verlustberechnung und die Aktualisierung der Gewichte
+            // sicher in einem Schritt kombiniert und den "varList"-Fehler vermeidet.
+            this.optimizer.minimize(() => {
                 const sofaPoints = this.getShapePoints();
+                
+                // Verlustberechnung bei leerem Sofa
                 if (sofaPoints.shape[0] === 0) {
                     const shapeValues = this.model.predict(this.grid);
                     const area = tf.relu(shapeValues).mean();
-                    return area.mul(-1).mul(lambdaArea);
+                    return area.mul(-1).mul(lambdaArea); // Nur Flächenverlust
                 }
 
+                // 1. Kollisionsverlust
                 let totalPenetration = tf.tensor(0.0);
                 const pathSamples = [0, 0.25, 0.5, 0.75, 1.0];
                 for (const t of pathSamples) {
@@ -44,26 +52,23 @@ export class Sofa {
                 }
                 const collisionLoss = totalPenetration.mul(lambdaCollision);
 
+                // 2. Flächen-Belohnung (als negativer Verlust)
                 const shapeValues = this.model.predict(this.grid);
                 const area = tf.relu(shapeValues).mean();
                 const areaLoss = area.mul(-1).mul(lambdaArea);
 
+                // Gesamter Verlust, der minimiert werden soll
                 return collisionLoss.add(areaLoss);
-            };
+            });
 
-            // **DIE ENDGÜLTIGE KORREKTUR**
-            // Wir verwenden die variableGrads-Funktion, aber übergeben ihr
-            // explizit die Liste der Gewichte, die sie ändern soll.
-            const grads = tf.variableGrads(lossFunction, this.model.trainableWeights);
-            this.optimizer.applyGradients(grads.grads);
 
-            // Berechne die Verluste erneut nur für die Anzeige
-            const sofaPoints = this.getShapePoints();
+            // Berechne die Verluste erneut (außerhalb der Optimierung) nur für die Anzeige
+            const sofaPointsForStats = this.getShapePoints();
             let finalCollisionLoss = 0;
-            if (sofaPoints.shape[0] > 0) {
+            if (sofaPointsForStats.shape[0] > 0) {
                 for (const t of [0, 0.25, 0.5, 0.75, 1.0]) {
                     const pos = this.getPointOnPath(corridor.path, t);
-                    const transformed = this.transformPoints(sofaPoints, pos.x, pos.y, pos.angle);
+                    const transformed = this.transformPoints(sofaPointsForStats, pos.x, pos.y, pos.angle);
                     finalCollisionLoss += transformed.arraySync().map(p => corridor.getPenetrationDepth(p[0], p[1])).reduce((s, d) => s + d, 0);
                 }
             }
