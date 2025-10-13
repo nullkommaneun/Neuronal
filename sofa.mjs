@@ -1,8 +1,9 @@
-// sofa.mjs (Final korrigierte und optimierte Version)
+// sofa.mjs (Final korrigierte Version mit funktionierendem Area Loss)
 
 export class Sofa {
     constructor() {
         this.model = null;
+        // Adam Optimizer mit Lernrate 0.01
         this.optimizer = tf.train.adam(0.01);
         this.gridResolution = 50;
         this.grid = this.createSampleGrid();
@@ -15,7 +16,7 @@ export class Sofa {
         this.model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
         this.model.add(tf.layers.dense({
             units: 1,
-            activation: 'tanh',
+            activation: 'tanh', // Output Bereich [-1, 1]
             // Korrekte Initialisierung für einen leeren Start.
             biasInitializer: tf.initializers.constant({ value: -1.0 })
         }));
@@ -42,7 +43,6 @@ export class Sofa {
         });
     }
 
-    // KORREKTUR: trainStep wurde grundlegend überarbeitet, um Gradient Tracking zu ermöglichen.
     async trainStep(corridor, lambdaCollision, lambdaArea) {
 
         const useTensorCollision = typeof corridor.getPenetrationDepthTF === 'function';
@@ -55,23 +55,23 @@ export class Sofa {
 
         // Die Definition der Verlustfunktion.
         const lossFunction = () => {
-            // Wir nutzen tf.tidy() hier, um Zwischentensoren zu bereinigen, aber den Verlust selbst zurückzugeben.
             return tf.tidy(() => {
-                // KRITISCHE KORREKTUR: Verwende this.model.apply() anstelle von this.model.predict().
-                // apply() stellt sicher, dass Gradienten aufgezeichnet werden.
+                // Nutze apply() für Gradient Tracking.
                 const shapeValuesRaw = this.model.apply(this.grid);
-
-                // apply() kann ein Array zurückgeben. Wir stellen sicher, dass wir den Tensor haben (für tf.sequential).
                 const shapeValues = Array.isArray(shapeValuesRaw) ? shapeValuesRaw[0] : shapeValuesRaw;
 
-                // 2. Area Loss (Flächenmaximierung).
-                const area = tf.relu(shapeValues).mean();
-                const areaLoss = area.mul(-1).mul(lambdaArea);
+                // KORREKTUR DES AREA LOSS (Behebt das "Zero Gradient" Problem):
+                // Wir müssen den negativen Durchschnitt der rohen Ausgabewerte minimieren.
+                // Dies liefert einen Gradienten zum Wachsen, auch wenn das Sofa leer ist (Werte < 0).
+                const areaLoss = shapeValues.mean().mul(-1).mul(lambdaArea);
 
                 // 3. Collision Loss (Kollisionsminimierung).
                 let collisionLoss = tf.scalar(0.0);
                 const pathSamples = [0, 0.25, 0.5, 0.75, 1.0];
-                const insideMask = tf.relu(shapeValues); // Continuous Relaxation
+
+                // WICHTIG: Für die Kollision nutzen wir weiterhin tf.relu() (Continuous Relaxation).
+                // Wir bestrafen Kollisionen nur, wenn der Punkt als "im Sofa" gilt (Wert > 0).
+                const insideMask = tf.relu(shapeValues);
 
                 for (const t of pathSamples) {
                     const pos = this.getPointOnPath(corridor.path, t);
@@ -90,16 +90,15 @@ export class Sofa {
         };
 
         // Führt die Optimierung durch.
-        // Wir lassen TF.js die Variablen automatisch erkennen (was nun dank apply() funktioniert).
-        // Dies behebt den "varList"-Fehler robust.
         this.optimizer.minimize(lossFunction);
 
         // --- TEIL 2: Statistik-Berechnung (Async) ---
 
         await tf.nextFrame(); // Warten auf GPU.
 
-        // Flächenberechnung (Async). Hier nutzen wir wieder predict() (Inferenz), da keine Gradienten benötigt werden.
+        // Flächenberechnung für die Anzeige (Definition der "Fläche" bleibt Mean(relu(Werte)))
         const finalShapeValues = this.model.predict(this.grid);
+        // Dies ist die tatsächliche "Flächen-Belohnung" (Area Reward) in der UI.
         const finalAreaTensor = tf.relu(finalShapeValues).mean()
         const finalAreaData = await finalAreaTensor.data();
         const finalArea = finalAreaData[0];
@@ -116,7 +115,11 @@ export class Sofa {
              for (const t of [0, 0.25, 0.5, 0.75, 1.0]) {
                 const pos = this.getPointOnPath(corridor.path, t);
                 const transformed = this.transformPointsJS(sofaPointsArray, pos.x, pos.y, pos.angle);
-                finalCollisionLoss += transformed.map(p => corridor.getPenetrationDepth(p[0], p[1])).reduce((s, d) => s + d, 0);
+
+                // Nutze CPU-Kollision für genaue Statistik
+                if (transformed.length > 0) {
+                   finalCollisionLoss += transformed.map(p => corridor.getPenetrationDepth(p[0], p[1])).reduce((s, d) => s + d, 0);
+                }
             }
         }
         sofaPointsForStats.dispose();
@@ -124,26 +127,17 @@ export class Sofa {
         return { collisionLoss: finalCollisionLoss, areaReward: finalArea };
     }
 
-    // Asynchrone Extraktion von Punkten. Nutzt predict() für Effizienz.
+    // Asynchrone Extraktion von Punkten.
     async getShapePointsAsync() {
         const predictions = this.model.predict(this.grid);
         const isInside = predictions.greater(0).flatten();
-
         const indices = await tf.whereAsync(isInside);
-
         if (indices.shape[0] === 0) {
-            predictions.dispose();
-            isInside.dispose();
-            indices.dispose();
+            predictions.dispose(); isInside.dispose(); indices.dispose();
             return tf.tensor2d([], [0, 2]);
         }
-
         const points = tf.gather(this.grid, indices.flatten());
-
-        predictions.dispose();
-        isInside.dispose();
-        indices.dispose();
-
+        predictions.dispose(); isInside.dispose(); indices.dispose();
         return points;
     }
 
