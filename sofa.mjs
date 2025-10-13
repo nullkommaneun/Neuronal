@@ -1,23 +1,35 @@
-// sofa.mjs (Final synchronisiert und optimiert)
+// sofa.mjs (Stabilisiert durch Architektur, Hyperparameter und Performance-Optimierung)
 
 export class Sofa {
     constructor() {
         this.model = null;
-        this.optimizer = tf.train.adam(0.01);
-        this.gridResolution = 50;
+        // (STABILITÄT) Lernrate auf 0.005 reduziert für stabilere Konvergenz.
+        this.optimizer = tf.train.adam(0.005);
+        this.gridResolution = 50; // Hohe Auflösung beibehalten dank Optimierungen
         this.grid = this.createSampleGrid();
         this.sofaScale = 150;
     }
 
     init() {
         this.model = tf.sequential();
-        this.model.add(tf.layers.dense({ inputShape: [2], units: 32, activation: 'relu' }));
-        this.model.add(tf.layers.dense({ units: 32, activation: 'relu' }));
+
+        // (STABILITÄT) Architektur-Anpassung: Hinzufügen von LayerNormalization.
+
+        // Input Layer
+        this.model.add(tf.layers.dense({ inputShape: [2], units: 32 }));
+        this.model.add(tf.layers.activation({ activation: 'relu' }));
+        this.model.add(tf.layers.layerNormalization()); // Normalisiert die Aktivierungen
+
+        // Hidden Layer
+        this.model.add(tf.layers.dense({ units: 32 }));
+        this.model.add(tf.layers.activation({ activation: 'relu' }));
+        this.model.add(tf.layers.layerNormalization());
+
+        // Output Layer
         this.model.add(tf.layers.dense({
             units: 1,
             activation: 'tanh',
-            // STRATEGIE-ANPASSUNG: Ein Bias von -0.5 hilft dem Modell,
-            // dank der neuen Wachstumsphase schneller sichtbar zu werden.
+            // Bias von -0.5 für einen sichtbaren Start, der zum Wachsen angeregt wird.
             biasInitializer: tf.initializers.constant({ value: -0.5 })
         }));
     }
@@ -32,7 +44,6 @@ export class Sofa {
         return tf.tidy(() => {
             const cos = Math.cos(angle);
             const sin = Math.sin(angle);
-            // Erstellung der Rotationsmatrix R = [[cos, sin], [-sin, cos]]
             const R = tf.tensor2d([[cos, sin], [-sin, cos]]);
             const rotatedPoints = tf.matMul(points, R);
             const scaledPoints = rotatedPoints.mul(this.sofaScale);
@@ -47,21 +58,21 @@ export class Sofa {
             return { collisionLoss: 0, areaReward: 0 };
         }
 
-        // --- TEIL 1: Optimierungsschritt (GPU, Differenzierbar) ---
+        // --- TEIL 1: Optimierungsschritt (GPU) ---
 
         const lossFunction = () => {
             return tf.tidy(() => {
-                // Nutze apply() für Gradient Tracking.
-                const shapeValuesRaw = this.model.apply(this.grid);
+                // WICHTIG: training=true ist notwendig für Normalisierungsschichten während des Trainings.
+                const shapeValuesRaw = this.model.apply(this.grid, { training: true });
                 const shapeValues = Array.isArray(shapeValuesRaw) ? shapeValuesRaw[0] : shapeValuesRaw;
 
-                // Area Loss: Negativer Durchschnitt der rohen Ausgabewerte (sorgt für Wachstum).
+                // Area Loss (Wachstum)
                 const areaLoss = shapeValues.mean().mul(-1).mul(lambdaArea);
 
-                // Collision Loss.
+                // Collision Loss
                 let collisionLoss = tf.scalar(0.0);
                 const pathSamples = [0, 0.25, 0.5, 0.75, 1.0];
-                const insideMask = tf.relu(shapeValues); // Continuous Relaxation
+                const insideMask = tf.relu(shapeValues);
 
                 for (const t of pathSamples) {
                     const pos = this.getPointOnPath(corridor.path, t);
@@ -77,36 +88,42 @@ export class Sofa {
             });
         };
 
-        // KRITISCHE KORREKTUR: GPU/CPU Synchronisation.
-
-        // 1. Führe die Optimierung durch und gib den Verlust zurück (returnLoss = true).
+        // Synchronisation (Fence): Stellt sicher, dass das Training abgeschlossen ist.
         const lossTensor = this.optimizer.minimize(lossFunction, /* returnLoss */ true);
-
-        // 2. WICHTIG: Synchronisation (Fence). Lade den Verlustwert auf die CPU.
-        // Dies stellt sicher, dass die Gewichte aktualisiert sind.
         if (lossTensor) {
             await lossTensor.data();
             lossTensor.dispose();
         }
 
-        // --- TEIL 2: Statistik-Berechnung (Async, mit aktualisierten Gewichten) ---
+        // --- TEIL 2: Statistik-Berechnung (Optimiert) ---
 
-        // Flächenberechnung für die Anzeige
+        // (PERFORMANCE) Überarbeitet, um GPU-Aufrufe zu minimieren und Berechnungen wiederzuverwenden.
+
+        // 1. Führe predict() EINMAL aus (Inferenzmodus).
         const finalShapeValues = this.model.predict(this.grid);
-        const finalAreaTensor = tf.relu(finalShapeValues).mean()
+
+        // 2. Berechne Fläche (GPU).
+        const finalAreaTensor = tf.relu(finalShapeValues).mean();
+
+        // 3. Finde Punkte im Inneren (GPU), nutze finalShapeValues erneut.
+        const isInside = finalShapeValues.greater(0).flatten();
+        const indices = await tf.whereAsync(isInside);
+
+        // 4. Lade Fläche herunter (Async).
         const finalAreaData = await finalAreaTensor.data();
         const finalArea = finalAreaData[0];
-        finalShapeValues.dispose();
-        finalAreaTensor.dispose();
 
-        // Kollisionsberechnung (Async)
-        const sofaPointsForStats = await this.getShapePointsAsync();
+        // 5. Berechne Kollisionsverlust.
         let finalCollisionLoss = 0;
+        if (indices.shape[0] > 0 && typeof corridor.getPenetrationDepth === 'function') {
+            // Extrahiere Punkte (GPU)
+            const points = tf.gather(this.grid, indices.flatten());
+            // Lade Punkte herunter (Async)
+            const sofaPointsArray = await points.array();
+            points.dispose();
 
-        if (sofaPointsForStats.shape[0] > 0 && typeof corridor.getPenetrationDepth === 'function') {
-             const sofaPointsArray = await sofaPointsForStats.array();
-
-             for (const t of [0, 0.25, 0.5, 0.75, 1.0]) {
+            // Berechne Kollision (CPU)
+            for (const t of [0, 0.25, 0.5, 0.75, 1.0]) {
                 const pos = this.getPointOnPath(corridor.path, t);
                 const transformed = this.transformPointsJS(sofaPointsArray, pos.x, pos.y, pos.angle);
 
@@ -115,23 +132,14 @@ export class Sofa {
                 }
             }
         }
-        sofaPointsForStats.dispose();
+
+        // Speicherbereinigung
+        finalShapeValues.dispose();
+        finalAreaTensor.dispose();
+        isInside.dispose();
+        indices.dispose();
 
         return { collisionLoss: finalCollisionLoss, areaReward: finalArea };
-    }
-
-    // Asynchrone Extraktion von Punkten (Manuelles Speichermanagement).
-    async getShapePointsAsync() {
-        const predictions = this.model.predict(this.grid);
-        const isInside = predictions.greater(0).flatten();
-        const indices = await tf.whereAsync(isInside);
-        if (indices.shape[0] === 0) {
-            predictions.dispose(); isInside.dispose(); indices.dispose();
-            return tf.tensor2d([], [0, 2]);
-        }
-        const points = tf.gather(this.grid, indices.flatten());
-        predictions.dispose(); isInside.dispose(); indices.dispose();
-        return points;
     }
 
     // Hilfsmethode für JavaScript-Transformation (CPU).
@@ -144,11 +152,13 @@ export class Sofa {
         ]);
     }
 
+    // (PERFORMANCE) Neue Funktion: Gibt Daten für Pixel UND Tensor für Kollision zurück.
+    // Ersetzt die alte Logik in app.mjs und spart eine komplette predict()-Berechnung pro Frame.
     async getShapeForDrawing() {
-        const predictions = this.model.predict(this.grid);
+        const predictions = this.model.predict(this.grid); // Inferenzmodus
         const data = await predictions.data();
-        predictions.dispose();
-        return data;
+        // Gibt beides zurück. Der Aufrufer (app.mjs) ist verantwortlich für das dispose() des Tensors.
+        return { data: data, tensor: predictions };
     }
 
     getPointOnPath(path, t) {
@@ -159,6 +169,8 @@ export class Sofa {
         const segmentT = (t * totalLength) % 1;
         const p1 = path[segment];
         const p2 = path[segment + 1];
+        // Zusätzliche Sicherheit
+        if (!p2) return p1;
         return {
             x: p1.x + (p2.x - p1.x) * segmentT,
             y: p1.y + (p2.y - p1.y) * segmentT,
@@ -166,4 +178,3 @@ export class Sofa {
         };
     }
 }
- 
