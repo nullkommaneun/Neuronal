@@ -1,4 +1,4 @@
-// sofa.mjs (Finaler, vollständiger Code)
+// sofa.mjs (Finaler korrigierter Code)
 export class Sofa {
     constructor() {
         this.model = null;
@@ -68,11 +68,16 @@ export class Sofa {
         });
     }
 
+    /**
+     * Gibt die Punkte zurück, die aktuell die Form des Sofas definieren.
+     * @returns {tf.Tensor2D}
+     */
     getShapePoints() {
         return tf.tidy(() => {
             const predictions = this.model.predict(this.grid);
             const isInside = predictions.greater(0).as1D();
-            return tf.booleanMask(this.grid, isInside);
+            // KORREKTUR: Die Funktion wird auf dem Tensor aufgerufen, nicht auf dem tf-Objekt.
+            return this.grid.booleanMask(isInside);
         });
     }
 
