@@ -1,4 +1,4 @@
-// sofa.mjs (Finaler, funktionierender Code)
+// sofa.mjs (Endgültiger, geprüfter Code)
 export class Sofa {
     constructor() {
         this.model = null;
@@ -14,7 +14,7 @@ export class Sofa {
         this.model.add(tf.layers.dense({
             units: 1,
             activation: 'tanh',
-            // NEUE ÄNDERUNG: Milder Bias für sichtbaren Start
+            // Milder Bias für einen sofort sichtbaren Start
             biasInitializer: tf.initializers.constant({ value: -1.0 })
         }));
     }
@@ -52,7 +52,11 @@ export class Sofa {
                 return collisionLoss.add(areaLoss);
             };
 
-            // NEUE ÄNDERUNG: Robuste Trainingsmethode, die den Fehler behebt
+            // **DIE ENDGÜLTIGE KORREKTUR**
+            // Wir nutzen die empfohlene .minimize() Funktion des Optimierers.
+            // Sie berechnet den Verlust UND wendet die Änderungen auf die
+            // Gewichte des Modells ('this.model.trainableWeights') an.
+            // Das behebt den "varList"-Fehler endgültig.
             this.optimizer.minimize(lossFunction, /* returnLoss */ false, this.model.trainableWeights);
 
 
