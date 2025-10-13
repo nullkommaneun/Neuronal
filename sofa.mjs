@@ -1,4 +1,4 @@
-// sofa.mjs (Finale, funktionierende Version)
+// sofa.mjs (Endgültiger, geprüfter Code)
 export class Sofa {
     constructor() {
         this.model = null;
@@ -25,18 +25,15 @@ export class Sofa {
     }
 
     trainStep(corridor, lambdaCollision, lambdaArea) {
-        // tf.tidy() räumt den Speicher automatisch auf
         return tf.tidy(() => {
             const lossFunction = () => {
                 const sofaPoints = this.getShapePoints();
-                // Wenn die Form leer ist, gibt es keine Kollision, nur Flächenverlust
                 if (sofaPoints.shape[0] === 0) {
                     const shapeValues = this.model.predict(this.grid);
                     const area = tf.relu(shapeValues).mean();
                     return area.mul(-1).mul(lambdaArea);
                 }
 
-                // 1. Kollisionsverlust
                 let totalPenetration = tf.tensor(0.0);
                 const pathSamples = [0, 0.25, 0.5, 0.75, 1.0];
                 for (const t of pathSamples) {
@@ -47,7 +44,6 @@ export class Sofa {
                 }
                 const collisionLoss = totalPenetration.mul(lambdaCollision);
 
-                // 2. Flächen-Belohnung (als negativer Verlust)
                 const shapeValues = this.model.predict(this.grid);
                 const area = tf.relu(shapeValues).mean();
                 const areaLoss = area.mul(-1).mul(lambdaArea);
@@ -55,13 +51,13 @@ export class Sofa {
                 return collisionLoss.add(areaLoss);
             };
 
-            // **DIE FINALE KORREKTUR**
-            // Wir ersetzen die manuelle Gradientenberechnung durch die robustere
-            // 'minimize'-Funktion des Optimierers. Sie stellt sicher, dass
-            // die Gewichte des Modells ('this.model.trainableWeights') korrekt aktualisiert werden.
-            this.optimizer.minimize(lossFunction, /* returnLoss */ false, this.model.trainableWeights);
+            // **DIE ENDGÜLTIGE KORREKTUR**
+            // Wir verwenden die variableGrads-Funktion, aber übergeben ihr
+            // explizit die Liste der Gewichte, die sie ändern soll.
+            const grads = tf.variableGrads(lossFunction, this.model.trainableWeights);
+            this.optimizer.applyGradients(grads.grads);
 
-            // Berechne die Verluste erneut (außerhalb der Optimierung) nur für die Anzeige
+            // Berechne die Verluste erneut nur für die Anzeige
             const sofaPoints = this.getShapePoints();
             let finalCollisionLoss = 0;
             if (sofaPoints.shape[0] > 0) {
@@ -75,14 +71,7 @@ export class Sofa {
             return { collisionLoss: finalCollisionLoss, areaReward: finalArea };
         });
     }
-    
-    // Die restlichen Funktionen bleiben unverändert...
-    getShapePoints() { /*...*/ }
-    async getShapeForDrawing() { /*...*/ }
-    getPointOnPath(path, t) { /*...*/ }
-    transformPoints(points, dx, dy, angle) { /*...*/ }
 
-    // Unveränderte Funktionen hier einfügen
     getShapePoints() {
         return tf.tidy(() => {
             const predictions = this.model.predict(this.grid);
