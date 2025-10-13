@@ -1,6 +1,7 @@
 // corridor.mjs (Aktualisierter Code mit hochoptimierter Tensor-Kollision)
 export class Corridor {
-    constructor(canvasWidth, canvasHeight) {
+    // Konstruktor benötigt keine Argumente (canvasWidth, canvasHeight) mehr.
+    constructor() {
         const scale = 150;
         const wallThickness = 20;
         const offsetX = 100;
@@ -25,11 +26,11 @@ export class Corridor {
             { x: offsetX + 2.5 * scale, y: offsetY + 2.5 * scale, angle: Math.PI / 2 },
         ];
 
-        // NEU: Initialisiere Tensoren für die GPU-Berechnung
+        // Initialisiere Tensoren für die GPU-Berechnung
         this.initTensors();
     }
 
-    // NEU: Bereitet Wanddaten als Tensoren für das Broadcasting vor.
+    // Bereitet Wanddaten als Tensoren für das Broadcasting vor.
     initTensors() {
         const minX = [], maxX = [], minY = [], maxY = [];
         for (const wall of this.walls) {
@@ -40,15 +41,13 @@ export class Corridor {
         }
 
         // Erstelle 1D Tensoren und erweitere die Dimension auf [1, W] (W = Anzahl Wände).
-        // Dies ist entscheidend für das Broadcasting gegen die Punkte, die das Shape [N, 1] haben werden.
         this.wallMinX = tf.tensor1d(minX).expandDims(0);
         this.wallMaxX = tf.tensor1d(maxX).expandDims(0);
         this.wallMinY = tf.tensor1d(minY).expandDims(0);
         this.wallMaxY = tf.tensor1d(maxY).expandDims(0);
     }
 
-    // NEU / KRITISCH: Tensor-basierte, differenzierbare Kollisionsprüfung (GPU).
-    // Diese Funktion ermöglicht das Training des Modells und ist vollständig vektorisiert.
+    // Tensor-basierte, differenzierbare Kollisionsprüfung (GPU).
     getPenetrationDepthTF(points) {
         // points shape: [N, 2] (N = Anzahl der Punkte)
         return tf.tidy(() => {
@@ -56,37 +55,29 @@ export class Corridor {
             const x = points.slice([0, 0], [-1, 1]);
             const y = points.slice([0, 1], [-1, 1]);
 
-            // 2. Berechne die Abstände zu allen 4 Kanten für alle Punkte gegen alle Wände gleichzeitig (Broadcasting).
-            // Operation z.B.: [N, 1] - [1, W] => Ergebnis-Shape: [N, W].
-            // Wenn der Wert positiv ist, ist der Punkt innerhalb der jeweiligen Grenze.
+            // 2. Berechne die Abstände (Broadcasting). Ergebnis-Shape: [N, W].
             const depthX1 = x.sub(this.wallMinX);
             const depthX2 = this.wallMaxX.sub(x);
             const depthY1 = y.sub(this.wallMinY);
             const depthY2 = this.wallMaxY.sub(y);
 
-            // 3. Finde die minimale Eindringtiefe für jede Wand-Punkt-Kombination.
-            // Stapeln entlang Achse 2 => Shape: [N, W, 4]
+            // 3. Finde die minimale Eindringtiefe. Shape: [N, W]
             const depths = tf.stack([depthX1, depthX2, depthY1, depthY2], 2);
-            // Minimum entlang Achse 2 => Shape: [N, W]
             const minDepths = depths.min(2);
 
             // 4. Wende differenzierbares Masking mit tf.relu() an.
-            // Ein Punkt ist nur dann in der Wand, wenn ALLE Abstände (depthX1...) positiv sind.
-            // Wenn der Punkt außerhalb ist, ist mindestens ein Abstand negativ, und somit ist minDepths negativ.
-            // tf.relu() klemmt negative Werte (keine Kollision) auf 0 und behält positive Werte (Kollisionstiefe).
             const penetrationDepths = tf.relu(minDepths); // Shape: [N, W]
 
-            // 5. Finde die maximale Penetration über alle Wände (Achse 1) für jeden Punkt.
+            // 5. Finde die maximale Penetration über alle Wände.
             const maxPenetration = penetrationDepths.max(1); // Shape: [N]
 
-            // 6. Reshape für Konsistenz mit dem Modell-Output (insideMask in sofa.mjs). Shape: [N, 1]
+            // 6. Reshape für Konsistenz. Shape: [N, 1]
             return maxPenetration.expandDims(1);
         });
     }
 
 
-    // Bestehend: CPU-basierte Kollisionsprüfung.
-    // Wird weiterhin für die genaue Statistik-Anzeige nach dem Training genutzt (aber nicht währenddessen).
+    // CPU-basierte Kollisionsprüfung (für Statistik).
     getPenetrationDepth(x, y) {
         let maxDepth = 0;
         for (const wall of this.walls) {
@@ -102,7 +93,7 @@ export class Corridor {
         return maxDepth;
     }
 
-    // Bestehend: Zeichenfunktion (Canvas API)
+    // Zeichenfunktion (Canvas API)
     draw(ctx) {
         ctx.fillStyle = "#34495e"; // Dunkelgrau/Blau für Wände
         this.walls.forEach(wall => ctx.fillRect(wall.x, wall.y, wall.width, wall.height));
